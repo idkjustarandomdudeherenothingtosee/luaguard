@@ -1,48 +1,30 @@
 // api/start.js
 import fs from 'fs/promises';
 import path from 'path';
+import crypto from 'crypto';
 
 // Generate a random 32-character hash
 function generateHash() {
-    const chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    let hash = '';
-    for (let i = 0; i < 32; i++) {
-        hash += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return hash;
+    return crypto.randomBytes(16).toString('hex'); // 32 hex characters
 }
 
 // Generate 10 random letters for filename
 function generateFilename() {
-    const letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    let filename = '';
-    for (let i = 0; i < 10; i++) {
-        filename += letters[Math.floor(Math.random() * letters.length)];
-    }
-    return filename;
+    return crypto.randomBytes(5).toString('hex'); // 10 hex characters
 }
 
 // Generate 16 random passwords
 function generatePasswords() {
     const passwords = [];
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-    
     for (let i = 0; i < 16; i++) {
-        let password = '';
-        const length = Math.floor(Math.random() * 12) + 8; // 8-20 characters
-        for (let j = 0; j < length; j++) {
-            password += chars[Math.floor(Math.random() * chars.length)];
-        }
-        passwords.push(password);
+        passwords.push(crypto.randomBytes(16).toString('base64'));
     }
     return passwords;
 }
 
 // Select password based on hash signal
 function selectPassword(hash, passwords) {
-    // Use the hash to determine which password to use
-    // Convert first 4 chars of hash to a number between 0-15
-    const hashSignal = parseInt(hash.substring(0, 4), 36) % 16;
+    const hashSignal = parseInt(hash.substring(0, 8), 16) % 16;
     return {
         password: passwords[hashSignal],
         signal: hashSignal
@@ -55,7 +37,6 @@ function base64Encode(str) {
 }
 
 function numericalEncode(str) {
-    // Convert each character to its ASCII code and join with separators
     let result = [];
     for (let i = 0; i < str.length; i++) {
         result.push(str.charCodeAt(i).toString());
@@ -64,22 +45,19 @@ function numericalEncode(str) {
 }
 
 function xorEncode(str, key) {
-    // Simple XOR encryption
     let result = '';
     for (let i = 0; i < str.length; i++) {
         const charCode = str.charCodeAt(i) ^ key.charCodeAt(i % key.length);
         result += String.fromCharCode(charCode);
     }
-    return result;
+    return Buffer.from(result).toString('base64'); // Convert to safe string
 }
 
 function base86Encode(str) {
-    // Custom base86 encoding (using printable ASCII range 32-117)
     const bytes = Buffer.from(str);
     let result = '';
     
     for (let i = 0; i < bytes.length; i++) {
-        // Map 0-255 to 32-117 range (86 possible values)
         const b1 = Math.floor(bytes[i] / 86) + 32;
         const b2 = (bytes[i] % 86) + 32;
         result += String.fromCharCode(b1) + String.fromCharCode(b2);
@@ -88,9 +66,22 @@ function base86Encode(str) {
     return result;
 }
 
-function reverseEncode(str) {
-    // Reverse the string as the final layer
-    return str.split('').reverse().join('');
+function atbashEncode(str) {
+    // Atbash cipher as the final layer
+    let result = '';
+    for (let i = 0; i < str.length; i++) {
+        const char = str[i];
+        if (char.match(/[a-z]/)) {
+            // a->z, b->y, etc.
+            result += String.fromCharCode(219 - char.charCodeAt(0));
+        } else if (char.match(/[A-Z]/)) {
+            // A->Z, B->Y, etc.
+            result += String.fromCharCode(155 - char.charCodeAt(0));
+        } else {
+            result += char;
+        }
+    }
+    return result;
 }
 
 // Main encryption function
@@ -99,23 +90,18 @@ function encryptCode(code, password) {
     
     // Layer 1: Base64
     encrypted = base64Encode(encrypted);
-    console.log('After Base64:', encrypted);
     
     // Layer 2: Numerical encoding
     encrypted = numericalEncode(encrypted);
-    console.log('After Numerical:', encrypted);
     
     // Layer 3: XOR with password
     encrypted = xorEncode(encrypted, password);
-    console.log('After XOR:', encrypted);
     
     // Layer 4: Base86
     encrypted = base86Encode(encrypted);
-    console.log('After Base86:', encrypted);
     
-    // Layer 5: Reverse (final layer)
-    encrypted = reverseEncode(encrypted);
-    console.log('After Reverse:', encrypted);
+    // Layer 5: Atbash cipher (final layer)
+    encrypted = atbashEncode(encrypted);
     
     return encrypted;
 }
@@ -160,37 +146,18 @@ export default async function handler(req, res) {
         
         // Generate filename (10 random letters)
         const filename = generateFilename();
-        const filePath = path.join(process.cwd(), 'out', `${filename}.luau`);
         
-        // Ensure the out directory exists
-        try {
-            await fs.mkdir(path.join(process.cwd(), 'out'), { recursive: true });
-        } catch (err) {
-            // Directory might already exist, ignore error
-        }
+        // Use /tmp for Vercel serverless functions (writable)
+        const tmpDir = path.join('/tmp', 'out');
+        const filePath = path.join(tmpDir, `${filename}.luau`);
+        
+        // Ensure the directory exists
+        await fs.mkdir(tmpDir, { recursive: true });
         
         // Write the file
         await fs.writeFile(filePath, fileContent, 'utf8');
         
-        // For Vercel, we need to store the file in /tmp for serverless functions
-        // But since you want /out, we'll create it and provide the URL to access it
-        // Note: In Vercel serverless functions, you can only write to /tmp
-        // So we'll write to /tmp/out instead and provide the filename
-        
-        const tmpFilePath = path.join('/tmp', 'out', `${filename}.luau`);
-        try {
-            await fs.mkdir(path.join('/tmp', 'out'), { recursive: true });
-        } catch (err) {
-            // Directory might already exist, ignore error
-        }
-        await fs.writeFile(tmpFilePath, fileContent, 'utf8');
-        
-        // Create URLs for accessing the file
-        const fileUrl = `/out/${filename}.luau`;
-        const tmpFileUrl = `/api/get-file?file=${filename}.luau`; // You'd need to create this endpoint
-        
-        // Store passwords mapping securely (in production, use a database)
-        // For now, we'll store in /tmp (will be lost on function cold start)
+        // Store passwords mapping in /tmp (temporary storage)
         const passwordsPath = path.join('/tmp', 'passwords.json');
         let passwordsMap = {};
         try {
@@ -199,26 +166,24 @@ export default async function handler(req, res) {
         } catch {
             passwordsMap = {};
         }
+        
         passwordsMap[hash] = {
             passwords,
             filename: `${filename}.luau`,
+            signal: signal,
             timestamp: Date.now()
         };
+        
         await fs.writeFile(passwordsPath, JSON.stringify(passwordsMap), 'utf8');
         
+        // Return success response with file info
         return res.status(200).json({
             success: true,
             hash: hash,
             filename: `${filename}.luau`,
-            fileUrl: fileUrl,
-            downloadUrl: `/api/download/${filename}.luau`, // You'd need to create this endpoint
             message: 'Code encrypted and saved successfully',
-            // Include these for debugging (remove in production)
-            debug: {
-                usedPasswordIndex: signal,
-                filePath: filePath,
-                tmpPath: tmpFilePath
-            }
+            downloadUrl: `/api/get-file?file=${filename}.luau`, // You'll need to create this endpoint
+            note: 'File saved in /tmp/out (temporary storage)'
         });
         
     } catch (error) {
