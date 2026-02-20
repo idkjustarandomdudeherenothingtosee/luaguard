@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/start",
+      "dest": "/api/start.js"
+    },
+    {
+      "src": "/out/(.*)",
+      "dest": "/api/get-file.js?file=$1"
+    }
+  ],
+  "installCommand": "npm install",
+  "buildCommand": "echo 'Build complete'"
+}
