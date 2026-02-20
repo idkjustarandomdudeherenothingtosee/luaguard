@@ -3,130 +3,448 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lua Code Runner</title>
+    <title>Lua Code Encryptor</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             padding: 20px;
-            background-color: #f5f5f5;
         }
-        
+
         .container {
-            background-color: white;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
         }
-        
-        h1 {
-            color: #333;
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.95;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .input-section {
             margin-bottom: 20px;
         }
-        
+
+        .label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 1.1em;
+        }
+
+        .label i {
+            color: #667eea;
+            margin-right: 5px;
+        }
+
+        .code-editor {
+            background: #1e1e1e;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid #e0e0e0;
+            transition: border-color 0.3s;
+        }
+
+        .code-editor:focus-within {
+            border-color: #667eea;
+        }
+
+        .code-header {
+            background: #2d2d2d;
+            padding: 10px 15px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #404040;
+        }
+
+        .code-header span {
+            color: #fff;
+            font-size: 0.9em;
+            font-family: 'Courier New', monospace;
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .dot.red { background: #ff5f56; }
+        .dot.yellow { background: #ffbd2e; }
+        .dot.green { background: #27c93f; }
+
+        .dots {
+            display: flex;
+            margin-right: 15px;
+        }
+
         textarea {
             width: 100%;
-            height: 200px;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            height: 250px;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
             font-family: 'Courier New', monospace;
             font-size: 14px;
-            resize: vertical;
-            margin-bottom: 10px;
-        }
-        
-        textarea:focus {
-            outline: none;
-            border-color: #007bff;
-            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-        }
-        
-        button {
-            background-color: #007bff;
-            color: white;
+            line-height: 1.5;
             border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            font-size: 16px;
+            resize: vertical;
+            outline: none;
+        }
+
+        textarea::placeholder {
+            color: #6b6b6b;
+        }
+
+        .features {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .feature {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px 20px;
+            flex: 1;
+            min-width: 150px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 1px solid #e9ecef;
+        }
+
+        .feature i {
+            font-size: 1.5em;
+            color: #667eea;
+        }
+
+        .feature span {
+            font-weight: 500;
+            color: #495057;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1em;
+            font-weight: 600;
             cursor: pointer;
-            transition: background-color 0.2s;
+            transition: all 0.3s;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
         }
-        
-        button:hover {
-            background-color: #0056b3;
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
         }
-        
-        button:disabled {
-            background-color: #ccc;
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
             cursor: not-allowed;
+            transform: none;
         }
-        
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #495057;
+            border: 2px solid #e9ecef;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef;
+            border-color: #dee2e6;
+        }
+
+        .result-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #e9ecef;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .result-header h3 {
+            color: #333;
+            font-size: 1.2em;
+        }
+
+        .result-header h3 i {
+            color: #667eea;
+            margin-right: 8px;
+        }
+
         .status {
-            margin-top: 10px;
-            padding: 10px;
-            border-radius: 4px;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 500;
             display: none;
         }
-        
+
         .status.success {
-            background-color: #d4edda;
+            background: #d4edda;
             color: #155724;
             border: 1px solid #c3e6cb;
             display: block;
         }
-        
+
         .status.error {
-            background-color: #f8d7da;
+            background: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
             display: block;
         }
-        
-        .response {
-            margin-top: 20px;
-            padding: 10px;
-            background-color: #f8f9fa;
+
+        .result-box {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
             border: 1px solid #dee2e6;
-            border-radius: 4px;
-            display: none;
+            margin-top: 15px;
         }
-        
-        .response.show {
-            display: block;
+
+        .result-box .hash {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            word-break: break-all;
+            margin-bottom: 15px;
         }
-        
-        .response pre {
-            margin: 0;
+
+        .result-box .encrypted {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            word-break: break-all;
+            max-height: 200px;
+            overflow-y: auto;
             white-space: pre-wrap;
-            word-wrap: break-word;
+        }
+
+        .download-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 25px;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 500;
+            margin-top: 15px;
+            transition: all 0.3s;
+        }
+
+        .download-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+        }
+
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #667eea;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+            color: #6c757d;
+        }
+
+        .example-btn {
+            background: none;
+            border: 1px dashed #667eea;
+            color: #667eea;
+            padding: 5px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s;
+        }
+
+        .example-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .button-group {
+                flex-direction: column;
+            }
+            
+            .features {
+                flex-direction: column;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Lua Code Runner</h1>
-        
-        <textarea id="luaCode" placeholder="Enter your Lua code here...">print("Hello, World!")</textarea>
-        
-        <button id="runButton" onclick="sendLuaCode()">Run Code</button>
-        
-        <div id="status" class="status"></div>
-        
-        <div id="response" class="response">
-            <strong>Response:</strong>
-            <pre id="responseContent"></pre>
+        <div class="header">
+            <h1>🔒 Lua Code Encryptor</h1>
+            <p>Secure your Lua scripts with multi-layer encryption</p>
+        </div>
+
+        <div class="content">
+            <div class="input-section">
+                <div class="label">
+                    <i>📝</i> Enter your Lua code:
+                </div>
+                <div class="code-editor">
+                    <div class="code-header">
+                        <div class="dots">
+                            <div class="dot red"></div>
+                            <div class="dot yellow"></div>
+                            <div class="dot green"></div>
+                        </div>
+                        <span>script.lua</span>
+                        <button class="example-btn" onclick="loadExample()" style="margin-left: auto;">Load Example</button>
+                    </div>
+                    <textarea id="luaCode" placeholder="-- Enter your Lua code here&#10;print('Hello, World!')&#10;&#10;local function main()&#10;    print('Running encrypted code')&#10;end&#10;&#10;main()"></textarea>
+                </div>
+            </div>
+
+            <div class="features">
+                <div class="feature">
+                    <i>🔐</i>
+                    <span>5 Layers</span>
+                </div>
+                <div class="feature">
+                    <i>🔑</i>
+                    <span>16 Passwords</span>
+                </div>
+                <div class="feature">
+                    <i>📦</i>
+                    <span>32-char Hash</span>
+                </div>
+                <div class="feature">
+                    <i>💾</i>
+                    <span>Auto-save</span>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-primary" id="encryptBtn" onclick="encryptCode()">
+                    <i>🔒</i> Encrypt & Save
+                </button>
+                <button class="btn btn-secondary" onclick="clearAll()">
+                    <i>🗑️</i> Clear
+                </button>
+            </div>
+
+            <div id="status" class="status"></div>
+
+            <div id="resultSection" class="result-section" style="display: none;">
+                <div class="result-header">
+                    <h3><i>📋</i> Encryption Result</h3>
+                </div>
+                
+                <div class="result-box">
+                    <div class="label">Hash:</div>
+                    <div class="hash" id="resultHash"></div>
+                    
+                    <div class="label" style="margin-top: 15px;">Encrypted Code:</div>
+                    <div class="encrypted" id="resultEncrypted"></div>
+                    
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <a id="downloadLink" class="download-link" href="#" target="_blank">
+                            <i>📥</i> Download .luau file
+                        </a>
+                        <button class="btn btn-secondary" onclick="copyToClipboard()" style="padding: 12px 25px; flex: 0;">
+                            <i>📋</i> Copy
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>🔐 Multi-layer encryption • 5 layers • 16 passwords • Auto-generated hash</p>
         </div>
     </div>
 
     <script>
-        async function sendLuaCode() {
+        async function encryptCode() {
             const textarea = document.getElementById('luaCode');
-            const button = document.getElementById('runButton');
+            const button = document.getElementById('encryptBtn');
             const statusDiv = document.getElementById('status');
-            const responseDiv = document.getElementById('response');
-            const responseContent = document.getElementById('responseContent');
+            const resultSection = document.getElementById('resultSection');
             
             const luaCode = textarea.value.trim();
             
@@ -137,14 +455,14 @@
             
             // Disable button while sending
             button.disabled = true;
-            button.textContent = 'Sending...';
+            button.innerHTML = '<div class="loader"></div> Encrypting...';
             
-            // Clear previous status and response
+            // Clear previous status and result
             statusDiv.className = 'status';
-            responseDiv.classList.remove('show');
+            resultSection.style.display = 'none';
             
             try {
-                const response = await fetch('/api/start.js', {
+                const response = await fetch('/api/start', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -154,21 +472,32 @@
                 
                 const data = await response.json();
                 
-                if (response.ok) {
-                    showStatus('Code sent successfully!', 'success');
+                if (response.ok && data.success) {
+                    showStatus('✅ Code encrypted successfully!', 'success');
                     
-                    // Display the response
-                    responseContent.textContent = JSON.stringify(data, null, 2);
-                    responseDiv.classList.add('show');
+                    // Display the result
+                    document.getElementById('resultHash').textContent = data.hash;
+                    document.getElementById('resultEncrypted').textContent = 
+                        `getgenv().code_hash = "${data.hash}"\n\n-- Encrypted code\n...`; // Show preview
+                    
+                    // Set download link
+                    const downloadLink = document.getElementById('downloadLink');
+                    downloadLink.href = data.downloadUrl || `/api/get-file?file=${data.filename}`;
+                    
+                    resultSection.style.display = 'block';
+                    
+                    // Store full result for copying
+                    window.lastResult = data;
                 } else {
-                    showStatus(`Error: ${data.error || response.statusText}`, 'error');
+                    showStatus(`❌ Error: ${data.error || 'Unknown error'}`, 'error');
                 }
             } catch (error) {
-                showStatus(`Network error: ${error.message}`, 'error');
+                showStatus(`❌ Network error: ${error.message}`, 'error');
+                console.error('Error:', error);
             } finally {
                 // Re-enable button
                 button.disabled = false;
-                button.textContent = 'Run Code';
+                button.innerHTML = '<i>🔒</i> Encrypt & Save';
             }
         }
         
@@ -178,12 +507,58 @@
             statusDiv.className = `status ${type}`;
         }
         
-        // Optional: Add keyboard shortcut (Ctrl+Enter) to run code
+        function clearAll() {
+            document.getElementById('luaCode').value = '';
+            document.getElementById('status').className = 'status';
+            document.getElementById('resultSection').style.display = 'none';
+            window.lastResult = null;
+        }
+        
+        function loadExample() {
+            document.getElementById('luaCode').value = `-- Advanced Lua Example
+local function fibonacci(n)
+    if n <= 1 then
+        return n
+    end
+    return fibonacci(n-1) + fibonacci(n-2)
+end
+
+print("Fibonacci(10) =", fibonacci(10))
+
+local players = {"Alice", "Bob", "Charlie"}
+for i, player in ipairs(players) do
+    print("Player " .. i .. ": " .. player)
+end
+
+-- Your secret logic here
+getgenv().secret_key = "my_secret_key"`;
+        }
+        
+        function copyToClipboard() {
+            if (!window.lastResult) return;
+            
+            const text = `getgenv().code_hash = "${window.lastResult.hash}"\n\n-- File: ${window.lastResult.filename}\n-- Download: ${window.location.origin}${window.lastResult.downloadUrl}`;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                showStatus('✅ Copied to clipboard!', 'success');
+                setTimeout(() => {
+                    document.getElementById('status').className = 'status';
+                }, 2000);
+            });
+        }
+        
+        // Add keyboard shortcut (Ctrl+Enter)
         document.getElementById('luaCode').addEventListener('keydown', function(e) {
             if (e.ctrlKey && e.key === 'Enter') {
                 e.preventDefault();
-                sendLuaCode();
+                encryptCode();
             }
+        });
+        
+        // Load example on page load
+        window.addEventListener('load', function() {
+            // Optional: Load example automatically
+            // loadExample();
         });
     </script>
 </body>
