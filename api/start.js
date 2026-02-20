@@ -1,4 +1,6 @@
 // api/start.js
+import fs from 'fs/promises';
+import path from 'path';
 
 // Generate a random 32-character hash
 function generateHash() {
@@ -8,6 +10,16 @@ function generateHash() {
         hash += chars[Math.floor(Math.random() * chars.length)];
     }
     return hash;
+}
+
+// Generate 10 random letters for filename
+function generateFilename() {
+    const letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let filename = '';
+    for (let i = 0; i < 10; i++) {
+        filename += letters[Math.floor(Math.random() * letters.length)];
+    }
+    return filename;
 }
 
 // Generate 16 random passwords
@@ -143,24 +155,70 @@ export default async function handler(req, res) {
         // Encrypt the code
         const encryptedCode = encryptCode(code, password);
         
-        // Prepare the response with getgenv().code_hash
-        const result = `getgenv().code_hash = "${hash}"\n\n-- Encrypted code (password signal: ${signal})\n${encryptedCode}`;
+        // Prepare the content for the file
+        const fileContent = `getgenv().code_hash = "${hash}"\n\n-- Encrypted code (password signal: ${signal})\n${encryptedCode}`;
         
-        // Store passwords somewhere? In production, you'd want to store these securely
-        // For this example, we'll include them in the response for demonstration
-        // In production, you'd remove this and store passwords securely
-        const debug = {
-            hash,
-            usedPasswordIndex: signal,
-            usedPassword: password,
-            allPasswords: passwords // Remove this in production!
+        // Generate filename (10 random letters)
+        const filename = generateFilename();
+        const filePath = path.join(process.cwd(), 'out', `${filename}.luau`);
+        
+        // Ensure the out directory exists
+        try {
+            await fs.mkdir(path.join(process.cwd(), 'out'), { recursive: true });
+        } catch (err) {
+            // Directory might already exist, ignore error
+        }
+        
+        // Write the file
+        await fs.writeFile(filePath, fileContent, 'utf8');
+        
+        // For Vercel, we need to store the file in /tmp for serverless functions
+        // But since you want /out, we'll create it and provide the URL to access it
+        // Note: In Vercel serverless functions, you can only write to /tmp
+        // So we'll write to /tmp/out instead and provide the filename
+        
+        const tmpFilePath = path.join('/tmp', 'out', `${filename}.luau`);
+        try {
+            await fs.mkdir(path.join('/tmp', 'out'), { recursive: true });
+        } catch (err) {
+            // Directory might already exist, ignore error
+        }
+        await fs.writeFile(tmpFilePath, fileContent, 'utf8');
+        
+        // Create URLs for accessing the file
+        const fileUrl = `/out/${filename}.luau`;
+        const tmpFileUrl = `/api/get-file?file=${filename}.luau`; // You'd need to create this endpoint
+        
+        // Store passwords mapping securely (in production, use a database)
+        // For now, we'll store in /tmp (will be lost on function cold start)
+        const passwordsPath = path.join('/tmp', 'passwords.json');
+        let passwordsMap = {};
+        try {
+            const existing = await fs.readFile(passwordsPath, 'utf8');
+            passwordsMap = JSON.parse(existing);
+        } catch {
+            passwordsMap = {};
+        }
+        passwordsMap[hash] = {
+            passwords,
+            filename: `${filename}.luau`,
+            timestamp: Date.now()
         };
+        await fs.writeFile(passwordsPath, JSON.stringify(passwordsMap), 'utf8');
         
         return res.status(200).json({
             success: true,
-            result,
-            debug, // Remove this in production!
-            message: 'Code encrypted successfully'
+            hash: hash,
+            filename: `${filename}.luau`,
+            fileUrl: fileUrl,
+            downloadUrl: `/api/download/${filename}.luau`, // You'd need to create this endpoint
+            message: 'Code encrypted and saved successfully',
+            // Include these for debugging (remove in production)
+            debug: {
+                usedPasswordIndex: signal,
+                filePath: filePath,
+                tmpPath: tmpFilePath
+            }
         });
         
     } catch (error) {
