@@ -1,1 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Code Runner</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: vertical;
+            margin-bottom: 10px;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+        
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+        
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+        
+        .response {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        .response.show {
+            display: block;
+        }
+        
+        .response pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Lua Code Runner</h1>
+        
+        <textarea id="luaCode" placeholder="Enter your Lua code here...">print("Hello, World!")</textarea>
+        
+        <button id="runButton" onclick="sendLuaCode()">Run Code</button>
+        
+        <div id="status" class="status"></div>
+        
+        <div id="response" class="response">
+            <strong>Response:</strong>
+            <pre id="responseContent"></pre>
+        </div>
+    </div>
 
+    <script>
+        async function sendLuaCode() {
+            const textarea = document.getElementById('luaCode');
+            const button = document.getElementById('runButton');
+            const statusDiv = document.getElementById('status');
+            const responseDiv = document.getElementById('response');
+            const responseContent = document.getElementById('responseContent');
+            
+            const luaCode = textarea.value.trim();
+            
+            if (!luaCode) {
+                showStatus('Please enter some Lua code', 'error');
+                return;
+            }
+            
+            // Disable button while sending
+            button.disabled = true;
+            button.textContent = 'Sending...';
+            
+            // Clear previous status and response
+            statusDiv.className = 'status';
+            responseDiv.classList.remove('show');
+            
+            try {
+                const response = await fetch('/api/start.js', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ code: luaCode })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showStatus('Code sent successfully!', 'success');
+                    
+                    // Display the response
+                    responseContent.textContent = JSON.stringify(data, null, 2);
+                    responseDiv.classList.add('show');
+                } else {
+                    showStatus(`Error: ${data.error || response.statusText}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`Network error: ${error.message}`, 'error');
+            } finally {
+                // Re-enable button
+                button.disabled = false;
+                button.textContent = 'Run Code';
+            }
+        }
+        
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+        
+        // Optional: Add keyboard shortcut (Ctrl+Enter) to run code
+        document.getElementById('luaCode').addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                sendLuaCode();
+            }
+        });
+    </script>
+</body>
+</html>
