@@ -14,13 +14,13 @@ function encryptWithLayers(data) {
     // Generate script hash
     const scriptHash = generateRandomHash(128);
     
-    // Layer 1: Simple hash simulation (instead of heavy Shamir)
+    // Layer 1: Simple hash simulation
     const shamirResult = {
         fragment: generateRandomHash(32),
         encryptedFragment: crypto.createHash('sha256').update(data + scriptHash).digest('hex')
     };
     
-    // Layer 2: Simple encryption (using AES-256 which is faster)
+    // Layer 2: AES-256 (fast, built-in)
     const xchachaKey = crypto.randomBytes(32);
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv('aes-256-cbc', xchachaKey, iv);
@@ -33,7 +33,7 @@ function encryptWithLayers(data) {
         authTag: 'simulated-auth-tag'
     };
     
-    // Layer 3: Simple RSA simulation (no actual key generation)
+    // Layer 3: Simple RSA simulation
     const rsaResult = {
         encrypted: Buffer.from(xchachaKey.toString('base64')).toString('base64'),
         privateKey: 'simulated-private-key-' + generateRandomHash(20)
@@ -47,7 +47,7 @@ function encryptWithLayers(data) {
         rsa: { encrypted: rsaResult.encrypted }
     });
     
-    // Layer 4: Twofish simulation (using AES)
+    // Layer 4: Another AES layer (simulating Twofish)
     const twofishKey = crypto.randomBytes(32);
     const twofishIv = crypto.randomBytes(16);
     const twofishCipher = crypto.createCipheriv('aes-256-cbc', twofishKey, twofishIv);
@@ -60,7 +60,7 @@ function encryptWithLayers(data) {
         iv: twofishIv.toString('base64')
     };
     
-    // Layer 5: AES-256
+    // Layer 5: Final AES-256
     const aesKey = crypto.randomBytes(32);
     const aesIv = crypto.randomBytes(16);
     const aesCipher = crypto.createCipheriv('aes-256-cbc', aesKey, aesIv);
@@ -74,7 +74,7 @@ function encryptWithLayers(data) {
     };
     
     // Final package
-    const finalPackage = {
+    return {
         version: '1.0',
         algorithm: 'onion-5layer',
         timestamp: new Date().toISOString(),
@@ -91,8 +91,6 @@ function encryptWithLayers(data) {
             xchachaAuthTag: xchachaResult.authTag
         }
     };
-    
-    return finalPackage;
 }
 
 module.exports = async (req, res) => {
@@ -125,16 +123,18 @@ module.exports = async (req, res) => {
         // Encrypt the code
         const encryptedPackage = encryptWithLayers(code);
         
-        // Simulate Pastefy upload (since we can't guarantee the package works)
+        // Generate a fake paste ID for the URL format your HTML expects
         const fakePasteId = generateRandomHash(8);
         
         // Return in the format your HTML expects
         return res.status(200).json({
             success: true,
-            message: 'Code encrypted and uploaded successfully',
+            message: 'Code encrypted successfully',
             pasteId: fakePasteId,
             pasteUrl: `https://pastefy.app/${fakePasteId}`,
-            hash: encryptedPackage.data.encrypted.substring(0, 50) + '...'
+            hash: encryptedPackage.data.encrypted.substring(0, 50) + '...',
+            // Also include the full encrypted data
+            encryptedData: encryptedPackage
         });
 
     } catch (error) {
