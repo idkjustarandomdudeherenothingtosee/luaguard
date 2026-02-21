@@ -273,7 +273,7 @@
             try {
                 console.log('Sending request to /api/obfuscate.cjs');
                 
-                const response = await fetch('/api/obfuscate.cjs', {
+                const response = await fetch('https://luaguard-ochre.vercel.app/api/obfuscate.cjs', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
