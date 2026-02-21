@@ -5,25 +5,19 @@ const PASTEFY_API_KEY = '2K0kaS4rVTo11xKKp6JnlFROwAqFuBo817OxI0TIBX2QjOxawim3mBi
 
 // Generate 136-char hash with 8-char key at position 58
 function generateHashWithKey() {
-    // Generate 128 chars of random hex (128 chars = 64 bytes)
     const hash = crypto.randomBytes(64).toString('hex'); // 128 chars
-    
-    // Generate 8-char key (8 chars = 4 bytes)
     const key = crypto.randomBytes(4).toString('hex'); // 8 chars
-    
-    // Insert key at position 58 (0-indexed 57)
     const finalHash = hash.slice(0, 57) + key + hash.slice(57);
-    
     return {
-        fullHash: finalHash,        // 128 + 8 = 136 chars
+        fullHash: finalHash,
         key: key,
-        hashWithoutKey: hash        // Original 128 chars
+        hashWithoutKey: hash
     };
 }
 
 // AES-256 CBC encryption
 function aesEncrypt(data, key) {
-    // Derive 32-byte key from the 8-char key using SHA256
+    // Derive 32-byte key from 8-char key using SHA256
     const keyBuffer = crypto.createHash('sha256').update(key).digest();
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv('aes-256-cbc', keyBuffer, iv);
@@ -33,7 +27,8 @@ function aesEncrypt(data, key) {
     
     return {
         encrypted: encrypted,
-        iv: iv.toString('base64')
+        iv: iv.toString('base64'),
+        key: key
     };
 }
 
@@ -89,8 +84,7 @@ getgenv().IV_LG = "${aesResult.iv}"`;
         return res.status(200).json({
             success: true,
             pasteUrl: `https://pastefy.app/${paste.id}`,
-            hash: fullHash.substring(0, 20) + '...',
-            note: 'Key is at position 58-65 in the hash'
+            hash: fullHash.substring(0, 20) + '...'
         });
 
     } catch (error) {
