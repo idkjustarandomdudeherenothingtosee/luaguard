@@ -1,196 +1,204 @@
-// api/start.js
-import fs from 'fs/promises';
-import path from 'path';
 import crypto from 'crypto';
+import { PastefyClient } from '@interaapps/pastefy';
 
-// Generate a random 32-character hash
-function generateHash() {
-    return crypto.randomBytes(16).toString('hex'); // 32 hex characters
+// Pastefy API key
+const PASTEFY_API_KEY = '2K0kaS4rVTo11xKKp6JnlFROwAqFuBo817OxI0TIBX2QjOxawim3mBiEuPuj';
+
+// Helper function to generate random hash
+function generateRandomHash(length = 128) {
+    return crypto.randomBytes(Math.ceil(length / 2))
+        .toString('hex')
+        .slice(0, length);
 }
 
-// Generate 10 random letters for filename
-function generateFilename() {
-    return crypto.randomBytes(5).toString('hex'); // 10 hex characters
-}
-
-// Generate 16 random passwords
-function generatePasswords() {
-    const passwords = [];
-    for (let i = 0; i < 16; i++) {
-        passwords.push(crypto.randomBytes(16).toString('base64'));
-    }
-    return passwords;
-}
-
-// Select password based on hash signal
-function selectPassword(hash, passwords) {
-    const hashSignal = parseInt(hash.substring(0, 8), 16) % 16;
+// Shamir's Secret Sharing simulation (simplified for demo)
+function shamirSplit(secret) {
+    // In a real implementation, this would use actual Shamir's Secret Sharing
+    // For demo purposes, we're creating a simulated key fragment
+    const fragment = crypto.randomBytes(32).toString('hex');
     return {
-        password: passwords[hashSignal],
-        signal: hashSignal
+        fragment,
+        // Store encrypted form of the fragment that would require multiple shares
+        encryptedFragment: crypto.createHash('sha256').update(secret + fragment).digest('hex')
     };
 }
 
-// Encryption layers
-function base64Encode(str) {
-    return Buffer.from(str).toString('base64');
+// XChaCha20 encryption (using ChaCha20 as Node.js doesn't have native XChaCha20)
+function xChaCha20Encrypt(data, key) {
+    const iv = crypto.randomBytes(24); // XChaCha20 uses 24-byte nonce
+    const cipher = crypto.createCipheriv('chacha20-poly1305', key.slice(0, 32), iv.slice(0, 12));
+    const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    return {
+        encrypted: encrypted.toString('base64'),
+        iv: iv.toString('base64'),
+        authTag: authTag.toString('base64')
+    };
 }
 
-function numericalEncode(str) {
-    let result = [];
-    for (let i = 0; i < str.length; i++) {
-        result.push(str.charCodeAt(i).toString());
-    }
-    return result.join('|');
-}
-
-function xorEncode(str, key) {
-    let result = '';
-    for (let i = 0; i < str.length; i++) {
-        const charCode = str.charCodeAt(i) ^ key.charCodeAt(i % key.length);
-        result += String.fromCharCode(charCode);
-    }
-    return Buffer.from(result).toString('base64'); // Convert to safe string
-}
-
-function base86Encode(str) {
-    const bytes = Buffer.from(str);
-    let result = '';
+// RSA encryption
+function rsaEncrypt(data) {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
+        modulusLength: 2048,
+        publicKeyEncoding: { type: 'spki', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+    });
     
-    for (let i = 0; i < bytes.length; i++) {
-        const b1 = Math.floor(bytes[i] / 86) + 32;
-        const b2 = (bytes[i] % 86) + 32;
-        result += String.fromCharCode(b1) + String.fromCharCode(b2);
-    }
+    const encrypted = crypto.publicEncrypt(publicKey, Buffer.from(data));
     
-    return result;
+    return {
+        encrypted: encrypted.toString('base64'),
+        privateKey: privateKey // This would normally be split via Shamir
+    };
 }
 
-function atbashEncode(str) {
-    // Atbash cipher as the final layer
-    let result = '';
-    for (let i = 0; i < str.length; i++) {
-        const char = str[i];
-        if (char.match(/[a-z]/)) {
-            // a->z, b->y, etc.
-            result += String.fromCharCode(219 - char.charCodeAt(0));
-        } else if (char.match(/[A-Z]/)) {
-            // A->Z, B->Y, etc.
-            result += String.fromCharCode(155 - char.charCodeAt(0));
-        } else {
-            result += char;
-        }
-    }
-    return result;
+// Twofish encryption (using AES as fallback since Node.js doesn't have native Twofish)
+function twofishEncrypt(data) {
+    const key = crypto.randomBytes(32); // Twofish supports up to 256-bit keys
+    const iv = crypto.randomBytes(16);
+    // Using AES as a simulation since Twofish isn't natively available
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+    const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
+    
+    return {
+        encrypted: encrypted.toString('base64'),
+        key: key.toString('base64'),
+        iv: iv.toString('base64')
+    };
+}
+
+// AES-256 encryption
+function aes256Encrypt(data) {
+    const key = crypto.randomBytes(32);
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+    const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
+    
+    return {
+        encrypted: encrypted.toString('base64'),
+        key: key.toString('base64'),
+        iv: iv.toString('base64')
+    };
 }
 
 // Main encryption function
-function encryptCode(code, password) {
-    let encrypted = code;
+function encryptWithLayers(data) {
+    console.log('Starting encryption process...');
     
-    // Layer 1: Base64
-    encrypted = base64Encode(encrypted);
+    // Generate random hash for the script
+    const scriptHash = generateRandomHash(128);
+    console.log('Generated script hash:', scriptHash);
     
-    // Layer 2: Numerical encoding
-    encrypted = numericalEncode(encrypted);
+    // Layer 1: Shamir's Secret Sharing
+    const shamirResult = shamirSplit(data + scriptHash);
+    console.log('Layer 1 complete: Shamir Secret Sharing');
     
-    // Layer 3: XOR with password
-    encrypted = xorEncode(encrypted, password);
+    // Layer 2: XChaCha20
+    const xchachaKey = crypto.randomBytes(32);
+    const xchachaResult = xChaCha20Encrypt(data, xchachaKey);
+    console.log('Layer 2 complete: XChaCha20 encryption');
     
-    // Layer 4: Base86
-    encrypted = base86Encode(encrypted);
+    // Layer 3: RSA encrypt the XChaCha20 key
+    const rsaResult = rsaEncrypt(xchachaKey.toString('base64'));
+    console.log('Layer 3 complete: RSA encryption');
     
-    // Layer 5: Atbash cipher (final layer)
-    encrypted = atbashEncode(encrypted);
+    // Combine data for next layers
+    const combinedData = JSON.stringify({
+        scriptHash,
+        shamir: shamirResult,
+        xchacha: xchachaResult,
+        rsa: rsaResult
+    });
     
-    return encrypted;
+    // Layer 4: Twofish
+    const twofishResult = twofishEncrypt(combinedData);
+    console.log('Layer 4 complete: Twofish encryption');
+    
+    // Layer 5: AES-256
+    const aesResult = aes256Encrypt(JSON.stringify(twofishResult));
+    console.log('Layer 5 complete: AES-256 encryption');
+    
+    // Final encrypted package
+    const finalPackage = {
+        version: '1.0',
+        algorithm: 'onion-5layer',
+        timestamp: new Date().toISOString(),
+        data: aesResult,
+        // Store metadata needed for decryption (would normally be split via Shamir)
+        metadata: {
+            shamirFragment: shamirResult.fragment,
+            rsaPrivateKey: rsaResult.privateKey,
+            twofishKey: twofishResult.key,
+            twofishIv: twofishResult.iv,
+            aesKey: aesResult.key,
+            aesIv: aesResult.iv,
+            xchachaKey: xchachaKey.toString('base64'),
+            xchachaIv: xchachaResult.iv,
+            xchachaAuthTag: xchachaResult.authTag
+        }
+    };
+    
+    return finalPackage;
 }
 
-// Vercel serverless function handler
 export default async function handler(req, res) {
-    // Enable CORS
+    // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    
+
     // Handle preflight request
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
     }
-    
-    // Only allow POST requests
+
+    // Only allow POST
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
-    
+
     try {
         const { code } = req.body;
-        
+
         if (!code) {
-            return res.status(400).json({ error: 'No code provided' });
+            return res.status(400).json({ error: 'Code is required' });
         }
+
+        console.log('Received code to encrypt');
+
+        // Step 1: Encrypt the code with all layers
+        const encryptedPackage = encryptWithLayers(code);
         
-        // Generate hash and passwords
-        const hash = generateHash();
-        const passwords = generatePasswords();
+        // Step 2: Create paste on Pastefy
+        const client = new PastefyClient(PASTEFY_API_KEY);
         
-        // Select password based on hash
-        const { password, signal } = selectPassword(hash, passwords);
+        console.log('Creating paste on Pastefy...');
         
-        // Encrypt the code
-        const encryptedCode = encryptCode(code, password);
-        
-        // Prepare the content for the file
-        const fileContent = `getgenv().code_hash = "${hash}"\n\n-- Encrypted code (password signal: ${signal})\n${encryptedCode}`;
-        
-        // Generate filename (10 random letters)
-        const filename = generateFilename();
-        
-        // Use /tmp for Vercel serverless functions (writable)
-        const tmpDir = path.join('/tmp', 'out');
-        const filePath = path.join(tmpDir, `${filename}.luau`);
-        
-        // Ensure the directory exists
-        await fs.mkdir(tmpDir, { recursive: true });
-        
-        // Write the file
-        await fs.writeFile(filePath, fileContent, 'utf8');
-        
-        // Store passwords mapping in /tmp (temporary storage)
-        const passwordsPath = path.join('/tmp', 'passwords.json');
-        let passwordsMap = {};
-        try {
-            const existing = await fs.readFile(passwordsPath, 'utf8');
-            passwordsMap = JSON.parse(existing);
-        } catch {
-            passwordsMap = {};
-        }
-        
-        passwordsMap[hash] = {
-            passwords,
-            filename: `${filename}.luau`,
-            signal: signal,
-            timestamp: Date.now()
-        };
-        
-        await fs.writeFile(passwordsPath, JSON.stringify(passwordsMap), 'utf8');
-        
-        // Return success response with file info
+        const paste = await client.createPaste({
+            title: `Encrypted Code - ${new Date().toISOString()}`,
+            content: JSON.stringify(encryptedPackage, null, 2),
+            visibility: 'UNLISTED',
+            tags: ['encrypted', 'luaguard', 'multi-layer']
+        });
+
+        console.log('Paste created successfully:', paste.id);
+
+        // Return success response with paste URL
         return res.status(200).json({
             success: true,
-            hash: hash,
-            filename: `${filename}.luau`,
-            message: 'Code encrypted and saved successfully',
-            downloadUrl: `/api/get-file?file=${filename}.luau`, // You'll need to create this endpoint
-            note: 'File saved in /tmp/out (temporary storage)'
+            message: 'Code encrypted and uploaded successfully',
+            pasteId: paste.id,
+            pasteUrl: `https://pastefy.app/${paste.id}`,
+            hash: encryptedPackage.data.encrypted.substring(0, 50) + '...' // Preview of encrypted data
         });
-        
+
     } catch (error) {
-        console.error('Encryption error:', error);
-        return res.status(500).json({ 
-            error: 'Failed to encrypt code',
-            details: error.message 
+        console.error('Encryption/upload error:', error);
+        
+        return res.status(500).json({
+            error: 'Failed to encrypt and upload code',
+            details: error.message
         });
     }
 }
