@@ -7,16 +7,21 @@ function generateHashWithKey() {
     const hash = crypto.randomBytes(64).toString('hex');
     const key = crypto.randomBytes(4).toString('hex');
     const finalHash = hash.slice(0, 57) + key + hash.slice(57);
-    return { fullHash: finalHash, key: key, hashWithoutKey: hash };
+    return {
+        fullHash: finalHash,
+        key: key,
+        hashWithoutKey: hash
+    };
 }
 
-function aesEncrypt(data, key) {
-    const keyBuffer = crypto.createHash('sha256').update(key).digest();
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-cbc', keyBuffer, iv);
-    let encrypted = cipher.update(data, 'utf8', 'base64');
-    encrypted += cipher.final('base64');
-    return { encrypted: encrypted, iv: iv.toString('base64'), key: key };
+function xorEncrypt(data, key) {
+    let result = "";
+    for (let i = 0; i < data.length; i++) {
+        const keyChar = key.charCodeAt(i % key.length);
+        const dataChar = data.charCodeAt(i);
+        result += String.fromCharCode(dataChar ^ keyChar);
+    }
+    return Buffer.from(result).toString('base64');
 }
 
 module.exports = async (req, res) => {
@@ -39,22 +44,30 @@ module.exports = async (req, res) => {
         if (!code) return res.status(400).json({ error: 'Code is required' });
 
         const { fullHash, key, hashWithoutKey } = generateHashWithKey();
-        const dataToEncrypt = JSON.stringify({ hash: hashWithoutKey, content: code });
-        const aesResult = aesEncrypt(dataToEncrypt, key);
+        
+        const dataToEncrypt = JSON.stringify({
+            hash: hashWithoutKey,
+            content: code
+        });
+        
+        const encrypted = xorEncrypt(dataToEncrypt, key);
         
         const client = new PastefyClient(PASTEFY_API_KEY);
         const luaContent = `getgenv().HASH_LG = "${fullHash}"
-getgenv().CODE_LG = "${aesResult.encrypted}"
-getgenv().IV_LG = "${aesResult.iv}"`;
+getgenv().CODE_LG = "${encrypted}"`;
 
         const paste = await client.createPaste({
             title: `🔒 LuaGuard - ${new Date().toLocaleString()}`,
             content: luaContent,
             visibility: 'UNLISTED',
-            tags: ['luaguard', 'aes-256']
+            tags: ['luaguard', 'xor']
         });
 
-        res.status(200).json({ success: true, pasteUrl: `https://pastefy.app/${paste.id}` });
+        res.status(200).json({
+            success: true,
+            pasteUrl: `https://pastefy.app/${paste.id}`
+        });
+
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
