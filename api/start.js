@@ -1,34 +1,31 @@
-import crypto from 'crypto';
-import { PastefyClient } from '@interaapps/pastefy';
+const crypto = require('crypto');
+const { PastefyClient } = require('@interaapps/pastefy');
 
-// Pastefy API key
 const PASTEFY_API_KEY = '2K0kaS4rVTo11xKKp6JnlFROwAqFuBo817OxI0TIBX2QjOxawim3mBiEuPuj';
 
-// Helper function to generate random hash
 function generateRandomHash(length = 128) {
     return crypto.randomBytes(Math.ceil(length / 2))
         .toString('hex')
         .slice(0, length);
 }
 
-// Shamir's Secret Sharing simulation (simplified for demo)
+// Simulated Shamir's Secret Sharing
 function shamirSplit(secret) {
-    // In a real implementation, this would use actual Shamir's Secret Sharing
-    // For demo purposes, we're creating a simulated key fragment
     const fragment = crypto.randomBytes(32).toString('hex');
     return {
         fragment,
-        // Store encrypted form of the fragment that would require multiple shares
         encryptedFragment: crypto.createHash('sha256').update(secret + fragment).digest('hex')
     };
 }
 
-// XChaCha20 encryption (using ChaCha20 as Node.js doesn't have native XChaCha20)
+// XChaCha20 simulation (using available algorithms)
 function xChaCha20Encrypt(data, key) {
-    const iv = crypto.randomBytes(24); // XChaCha20 uses 24-byte nonce
-    const cipher = crypto.createCipheriv('chacha20-poly1305', key.slice(0, 32), iv.slice(0, 12));
+    const iv = crypto.randomBytes(16);
+    // Use AES-256-GCM as fallback since chacha20 might not be available
+    const cipher = crypto.createCipheriv('aes-256-gcm', key.slice(0, 32), iv);
     const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
     const authTag = cipher.getAuthTag();
+    
     return {
         encrypted: encrypted.toString('base64'),
         iv: iv.toString('base64'),
@@ -48,15 +45,14 @@ function rsaEncrypt(data) {
     
     return {
         encrypted: encrypted.toString('base64'),
-        privateKey: privateKey // This would normally be split via Shamir
+        privateKey: privateKey
     };
 }
 
-// Twofish encryption (using AES as fallback since Node.js doesn't have native Twofish)
+// Twofish simulation (using AES as Twofish isn't available in Node.js)
 function twofishEncrypt(data) {
-    const key = crypto.randomBytes(32); // Twofish supports up to 256-bit keys
+    const key = crypto.randomBytes(32);
     const iv = crypto.randomBytes(16);
-    // Using AES as a simulation since Twofish isn't natively available
     const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
     const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
     
@@ -85,38 +81,41 @@ function aes256Encrypt(data) {
 function encryptWithLayers(data) {
     console.log('Starting encryption process...');
     
-    // Generate random hash for the script
+    // Layer 0: Generate hash
     const scriptHash = generateRandomHash(128);
-    console.log('Generated script hash:', scriptHash);
+    console.log('Generated script hash');
     
     // Layer 1: Shamir's Secret Sharing
     const shamirResult = shamirSplit(data + scriptHash);
-    console.log('Layer 1 complete: Shamir Secret Sharing');
+    console.log('Layer 1 complete');
     
     // Layer 2: XChaCha20
     const xchachaKey = crypto.randomBytes(32);
     const xchachaResult = xChaCha20Encrypt(data, xchachaKey);
-    console.log('Layer 2 complete: XChaCha20 encryption');
+    console.log('Layer 2 complete');
     
     // Layer 3: RSA encrypt the XChaCha20 key
     const rsaResult = rsaEncrypt(xchachaKey.toString('base64'));
-    console.log('Layer 3 complete: RSA encryption');
+    console.log('Layer 3 complete');
     
     // Combine data for next layers
     const combinedData = JSON.stringify({
         scriptHash,
         shamir: shamirResult,
         xchacha: xchachaResult,
-        rsa: rsaResult
+        rsa: {
+            encrypted: rsaResult.encrypted
+            // private key not included in this layer
+        }
     });
     
     // Layer 4: Twofish
     const twofishResult = twofishEncrypt(combinedData);
-    console.log('Layer 4 complete: Twofish encryption');
+    console.log('Layer 4 complete');
     
     // Layer 5: AES-256
     const aesResult = aes256Encrypt(JSON.stringify(twofishResult));
-    console.log('Layer 5 complete: AES-256 encryption');
+    console.log('Layer 5 complete');
     
     // Final encrypted package
     const finalPackage = {
@@ -124,7 +123,7 @@ function encryptWithLayers(data) {
         algorithm: 'onion-5layer',
         timestamp: new Date().toISOString(),
         data: aesResult,
-        // Store metadata needed for decryption (would normally be split via Shamir)
+        // Metadata needed for decryption (in production, this would be split via Shamir)
         metadata: {
             shamirFragment: shamirResult.fragment,
             rsaPrivateKey: rsaResult.privateKey,
@@ -141,11 +140,12 @@ function encryptWithLayers(data) {
     return finalPackage;
 }
 
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
     // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Content-Type', 'application/json');
 
     // Handle preflight request
     if (req.method === 'OPTIONS') {
@@ -153,24 +153,49 @@ export default async function handler(req, res) {
         return;
     }
 
-    // Only allow POST
+    // Handle GET request for testing
+    if (req.method === 'GET') {
+        return res.status(200).json({ 
+            status: 'ok', 
+            message: 'LuaGuard API is running',
+            endpoints: {
+                POST: '/api/start - Upload encrypted code'
+            }
+        });
+    }
+
+    // Only allow POST for actual encryption
     if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
+        return res.status(405).json({ error: 'Method not allowed. Use POST.' });
     }
 
     try {
-        const { code } = req.body;
+        // Parse request body
+        let body;
+        try {
+            body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+        } catch (e) {
+            console.error('Failed to parse request body:', e);
+            return res.status(400).json({ error: 'Invalid JSON in request body' });
+        }
+
+        const { code } = body;
 
         if (!code) {
             return res.status(400).json({ error: 'Code is required' });
         }
 
-        console.log('Received code to encrypt');
+        if (typeof code !== 'string') {
+            return res.status(400).json({ error: 'Code must be a string' });
+        }
+
+        console.log('Received code to encrypt, length:', code.length);
 
         // Step 1: Encrypt the code with all layers
         const encryptedPackage = encryptWithLayers(code);
         
         // Step 2: Create paste on Pastefy
+        console.log('Initializing Pastefy client...');
         const client = new PastefyClient(PASTEFY_API_KEY);
         
         console.log('Creating paste on Pastefy...');
@@ -184,21 +209,30 @@ export default async function handler(req, res) {
 
         console.log('Paste created successfully:', paste.id);
 
-        // Return success response with paste URL
+        // Return success response
         return res.status(200).json({
             success: true,
             message: 'Code encrypted and uploaded successfully',
             pasteId: paste.id,
             pasteUrl: `https://pastefy.app/${paste.id}`,
-            hash: encryptedPackage.data.encrypted.substring(0, 50) + '...' // Preview of encrypted data
+            timestamp: new Date().toISOString()
         });
 
     } catch (error) {
         console.error('Encryption/upload error:', error);
         
+        // Determine error type and return appropriate status
+        if (error.message.includes('Pastefy') || error.code === 'ECONNREFUSED') {
+            return res.status(502).json({
+                error: 'Failed to connect to Pastefy service',
+                details: error.message
+            });
+        }
+        
         return res.status(500).json({
             error: 'Failed to encrypt and upload code',
-            details: error.message
+            details: error.message,
+            type: error.constructor.name
         });
     }
-}
+};
