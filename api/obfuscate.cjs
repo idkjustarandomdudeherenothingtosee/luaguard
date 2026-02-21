@@ -5,6 +5,7 @@ const os = require('os');
 const path = require('path');
 const { PastefyClient } = require('@interaapps/pastefy');
 const FormData = require('form-data');
+const axios = require('axios');
 
 const WYNFUSCATE_API_KEY = 'wynf_ew84z6L93odfnAc017sZaJdOVTwPBvH0';
 const WYNFUSCATE_URL = 'https://wynfuscate.com/api/v1';
@@ -40,57 +41,66 @@ async function obfuscateWithWynfuscate(code) {
         // Write code to temp file
         fs.writeFileSync(tempFilePath, code, 'utf-8');
         
+        // Create form data exactly like the working example
         const form = new FormData();
-        form.append('file', fs.createReadStream(tempFilePath));
+        form.append('file', fs.createReadStream(tempFilePath), {
+            filename: 'script.lua',
+            contentType: 'text/plain'
+        });
         form.append('targetPlatform', 'ROBLOX_COMPAT');
         form.append('enhancedCompression', 'true');
 
-        // Submit job
-        const submitResponse = await fetch(`${WYNFUSCATE_URL}/obfuscate`, {
-            method: 'POST',
-            headers: { 
-                'Authorization': `Bearer ${WYNFUSCATE_API_KEY}`,
-                ...form.getHeaders()
+        // Get form headers
+        const formHeaders = form.getHeaders();
+
+        console.log('Submitting to Wynfuscate...');
+
+        // Submit job using axios (like the working example)
+        const submitResponse = await axios.post(`${WYNFUSCATE_URL}/obfuscate`, form, {
+            headers: {
+                ...formHeaders,
+                'Authorization': `Bearer ${WYNFUSCATE_API_KEY}`
             },
-            body: form,
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
         });
 
-        if (!submitResponse.ok) {
-            const error = await submitResponse.text();
-            throw new Error(`Wynfuscate submission failed: ${error}`);
-        }
-
-        const job = await submitResponse.json();
+        const job = submitResponse.data;
         console.log('Job submitted:', job.id);
 
-        // Poll for completion
-        let jobStatus;
-        for (let i = 0; i < 30; i++) {
-            await new Promise(r => setTimeout(r, 2000));
-            
-            const statusResponse = await fetch(`${WYNFUSCATE_URL}/jobs/${job.id}`, {
+        // Poll for completion with exponential backoff
+        let pollInterval = 2000;
+        const maxInterval = 30000;
+        const maxPolls = 60;
+
+        for (let polls = 0; polls < maxPolls; polls++) {
+            const statusResponse = await axios.get(`${WYNFUSCATE_URL}/jobs/${job.id}`, {
                 headers: { 'Authorization': `Bearer ${WYNFUSCATE_API_KEY}` }
             });
             
-            if (!statusResponse.ok) continue;
-            
-            jobStatus = await statusResponse.json();
-            
-            if (jobStatus.status === 'completed') break;
-            if (jobStatus.status === 'failed') throw new Error('Obfuscation failed');
+            const status = statusResponse.data;
+
+            if (status.status === 'completed') {
+                console.log(`Processing complete! (${status.processingTimeMs}ms)`);
+                break;
+            } else if (status.status === 'failed') {
+                throw new Error(`Job failed: ${status.error?.message || 'Unknown error'}`);
+            }
+
+            await new Promise(r => setTimeout(r, pollInterval));
+            pollInterval = Math.min(pollInterval * 1.5, maxInterval);
         }
 
         // Download result
-        const downloadResponse = await fetch(`${WYNFUSCATE_URL}/jobs/${job.id}/download`, {
-            headers: { 'Authorization': `Bearer ${WYNFUSCATE_API_KEY}` }
+        console.log('Downloading obfuscated file...');
+        
+        const downloadResponse = await axios.get(`${WYNFUSCATE_URL}/jobs/${job.id}/download`, {
+            headers: { 'Authorization': `Bearer ${WYNFUSCATE_API_KEY}` },
+            responseType: 'arraybuffer'
         });
-        
-        if (!downloadResponse.ok) {
-            throw new Error('Failed to download result');
-        }
-        
-        return await downloadResponse.text();
-        
+
+        return Buffer.from(downloadResponse.data).toString('utf-8');
+
     } finally {
         // Clean up temp file
         try {
@@ -102,23 +112,33 @@ async function obfuscateWithWynfuscate(code) {
 }
 
 module.exports = async (req, res) => {
+    // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Content-Type', 'application/json');
 
+    // Handle preflight
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
     }
 
+    // Only allow POST
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
     try {
         const { code } = req.body;
-        if (!code) return res.status(400).json({ error: 'Code is required' });
+        
+        if (!code) {
+            return res.status(400).json({ error: 'Code is required' });
+        }
+
+        if (typeof code !== 'string') {
+            return res.status(400).json({ error: 'Code must be a string' });
+        }
 
         console.log('Starting Wynfuscate obfuscation with temp file...');
         
@@ -158,6 +178,15 @@ getgenv().CODE_LG = "${encrypted}"`;
 
     } catch (error) {
         console.error('Error:', error);
-        res.status(500).json({ error: error.message });
+        
+        // Better error response
+        if (error.response) {
+            // Axios error with response
+            res.status(500).json({ 
+                error: `API Error: ${error.response.status} - ${JSON.stringify(error.response.data)}` 
+            });
+        } else {
+            res.status(500).json({ error: error.message });
+        }
     }
 };
