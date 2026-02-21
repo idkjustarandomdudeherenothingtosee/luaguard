@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lua Code Encryptor</title>
+    <title>LuaGuard - Code Encryptor</title>
     <style>
         * {
             margin: 0;
@@ -15,298 +15,170 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             padding: 20px;
         }
 
         .container {
-            max-width: 900px;
-            margin: 0 auto;
             background: white;
             border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
+            padding: 40px;
+            width: 100%;
+            max-width: 600px;
         }
 
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
             text-align: center;
         }
 
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
         }
 
-        .header p {
-            font-size: 1.1em;
-            opacity: 0.95;
+        .description {
+            background: #f7f7f7;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 25px;
+            font-size: 13px;
+            color: #555;
+            line-height: 1.6;
         }
 
-        .content {
-            padding: 30px;
+        .description strong {
+            color: #764ba2;
         }
 
-        .input-section {
+        .input-group {
             margin-bottom: 20px;
         }
 
-        .label {
+        label {
             display: block;
             margin-bottom: 8px;
-            font-weight: 600;
-            color: #333;
-            font-size: 1.1em;
-        }
-
-        .label i {
-            color: #667eea;
-            margin-right: 5px;
-        }
-
-        .code-editor {
-            background: #1e1e1e;
-            border-radius: 12px;
-            overflow: hidden;
-            border: 2px solid #e0e0e0;
-            transition: border-color 0.3s;
-        }
-
-        .code-editor:focus-within {
-            border-color: #667eea;
-        }
-
-        .code-header {
-            background: #2d2d2d;
-            padding: 10px 15px;
-            display: flex;
-            align-items: center;
-            border-bottom: 1px solid #404040;
-        }
-
-        .code-header span {
-            color: #fff;
-            font-size: 0.9em;
-            font-family: 'Courier New', monospace;
-        }
-
-        .dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
-
-        .dot.red { background: #ff5f56; }
-        .dot.yellow { background: #ffbd2e; }
-        .dot.green { background: #27c93f; }
-
-        .dots {
-            display: flex;
-            margin-right: 15px;
+            color: #555;
+            font-weight: 500;
+            font-size: 14px;
         }
 
         textarea {
             width: 100%;
-            height: 250px;
-            padding: 20px;
-            background: #1e1e1e;
-            color: #d4d4d4;
-            font-family: 'Courier New', monospace;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
             font-size: 14px;
-            line-height: 1.5;
-            border: none;
             resize: vertical;
+            min-height: 150px;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
             outline: none;
+            border-color: #764ba2;
         }
 
-        textarea::placeholder {
-            color: #6b6b6b;
-        }
-
-        .features {
-            display: flex;
-            gap: 15px;
-            margin: 20px 0;
-            flex-wrap: wrap;
-        }
-
-        .feature {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 12px 20px;
-            flex: 1;
-            min-width: 150px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            border: 1px solid #e9ecef;
-        }
-
-        .feature i {
-            font-size: 1.5em;
-            color: #667eea;
-        }
-
-        .feature span {
-            font-weight: 500;
-            color: #495057;
-        }
-
-        .button-group {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 25px;
-        }
-
-        .btn {
-            padding: 15px 30px;
-            border: none;
-            border-radius: 12px;
-            font-size: 1.1em;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-
-        .btn-primary {
+        button {
+            width: 100%;
+            padding: 16px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
 
-        .btn-primary:hover {
+        button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
         }
 
-        .btn-primary:disabled {
-            opacity: 0.6;
+        button:disabled {
+            opacity: 0.7;
             cursor: not-allowed;
             transform: none;
         }
 
-        .btn-secondary {
-            background: #f8f9fa;
-            color: #495057;
-            border: 2px solid #e9ecef;
-        }
-
-        .btn-secondary:hover {
-            background: #e9ecef;
-            border-color: #dee2e6;
-        }
-
-        .result-section {
-            background: #f8f9fa;
-            border-radius: 12px;
+        .result {
+            margin-top: 25px;
             padding: 20px;
-            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            background: #f7f7f7;
+            display: none;
+        }
+
+        .result.show {
+            display: block;
+        }
+
+        .result.success {
+            border-left: 4px solid #4CAF50;
+        }
+
+        .result.error {
+            border-left: 4px solid #f44336;
         }
 
         .result-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
 
-        .result-header h3 {
+        .result-title {
+            font-weight: 600;
             color: #333;
-            font-size: 1.2em;
         }
 
-        .result-header h3 i {
-            color: #667eea;
-            margin-right: 8px;
+        .copy-btn {
+            background: #764ba2;
+            color: white;
+            border: none;
+            padding: 5px 15px;
+            border-radius: 5px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.3s;
         }
 
-        .status {
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: 500;
-            display: none;
+        .copy-btn:hover {
+            background: #5a3d7c;
         }
 
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-            display: block;
-        }
-
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-            display: block;
-        }
-
-        .result-box {
+        .result-content {
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            font-size: 12px;
             background: white;
-            border-radius: 8px;
-            padding: 20px;
-            border: 1px solid #dee2e6;
-            margin-top: 15px;
-        }
-
-        .result-box .hash {
-            background: #e9ecef;
             padding: 10px;
-            border-radius: 6px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            word-break: break-all;
-            margin-bottom: 15px;
-        }
-
-        .result-box .encrypted {
-            background: #1e1e1e;
-            color: #d4d4d4;
-            padding: 15px;
-            border-radius: 6px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            word-break: break-all;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
             max-height: 200px;
             overflow-y: auto;
-            white-space: pre-wrap;
         }
 
-        .download-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 12px 25px;
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 500;
-            margin-top: 15px;
-            transition: all 0.3s;
-        }
-
-        .download-link:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
-        }
-
-        .loader {
-            border: 3px solid #f3f3f3;
-            border-radius: 50%;
-            border-top: 3px solid #667eea;
+        .loading {
+            display: inline-block;
             width: 20px;
             height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #764ba2;
+            border-radius: 50%;
             animation: spin 1s linear infinite;
-            display: inline-block;
             margin-right: 10px;
         }
 
@@ -315,250 +187,114 @@
             100% { transform: rotate(360deg); }
         }
 
-        .footer {
-            text-align: center;
-            padding: 20px;
-            background: #f8f9fa;
-            border-top: 1px solid #e9ecef;
-            color: #6c757d;
-        }
-
-        .example-btn {
-            background: none;
-            border: 1px dashed #667eea;
-            color: #667eea;
-            padding: 5px 15px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: all 0.3s;
-        }
-
-        .example-btn:hover {
-            background: #667eea;
-            color: white;
-        }
-
-        @media (max-width: 768px) {
-            .button-group {
-                flex-direction: column;
-            }
-            
-            .features {
-                flex-direction: column;
-            }
-            
-            .header h1 {
-                font-size: 2em;
-            }
+        .button-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>🔒 Lua Code Encryptor</h1>
-            <p>Secure your Lua scripts with multi-layer encryption</p>
+        <h1>🔒 LuaGuard</h1>
+        <div class="subtitle">Multi-Layer Code Encryption</div>
+        
+        <div class="description">
+            <strong>How it works:</strong> Your code goes through 5 layers of encryption:<br>
+            1. Shamir's Secret Sharing (Key Fragment)<br>
+            2. XChaCha20 encryption<br>
+            3. RSA encryption for XChaCha20 key<br>
+            4. Twofish encryption<br>
+            5. AES-256 final layer<br>
+            Then it's securely stored on Pastefy
         </div>
 
-        <div class="content">
-            <div class="input-section">
-                <div class="label">
-                    <i>📝</i> Enter your Lua code:
-                </div>
-                <div class="code-editor">
-                    <div class="code-header">
-                        <div class="dots">
-                            <div class="dot red"></div>
-                            <div class="dot yellow"></div>
-                            <div class="dot green"></div>
-                        </div>
-                        <span>script.lua</span>
-                        <button class="example-btn" onclick="loadExample()" style="margin-left: auto;">Load Example</button>
-                    </div>
-                    <textarea id="luaCode" placeholder="-- Enter your Lua code here&#10;print('Hello, World!')&#10;&#10;local function main()&#10;    print('Running encrypted code')&#10;end&#10;&#10;main()"></textarea>
-                </div>
-            </div>
-
-            <div class="features">
-                <div class="feature">
-                    <i>🔐</i>
-                    <span>5 Layers</span>
-                </div>
-                <div class="feature">
-                    <i>🔑</i>
-                    <span>16 Passwords</span>
-                </div>
-                <div class="feature">
-                    <i>📦</i>
-                    <span>32-char Hash</span>
-                </div>
-                <div class="feature">
-                    <i>💾</i>
-                    <span>Auto-save</span>
-                </div>
-            </div>
-
-            <div class="button-group">
-                <button class="btn btn-primary" id="encryptBtn" onclick="encryptCode()">
-                    <i>🔒</i> Encrypt & Save
-                </button>
-                <button class="btn btn-secondary" onclick="clearAll()">
-                    <i>🗑️</i> Clear
-                </button>
-            </div>
-
-            <div id="status" class="status"></div>
-
-            <div id="resultSection" class="result-section" style="display: none;">
-                <div class="result-header">
-                    <h3><i>📋</i> Encryption Result</h3>
-                </div>
-                
-                <div class="result-box">
-                    <div class="label">Hash:</div>
-                    <div class="hash" id="resultHash"></div>
-                    
-                    <div class="label" style="margin-top: 15px;">Encrypted Code:</div>
-                    <div class="encrypted" id="resultEncrypted"></div>
-                    
-                    <div style="display: flex; gap: 10px; margin-top: 15px;">
-                        <a id="downloadLink" class="download-link" href="#" target="_blank">
-                            <i>📥</i> Download .luau file
-                        </a>
-                        <button class="btn btn-secondary" onclick="copyToClipboard()" style="padding: 12px 25px; flex: 0;">
-                            <i>📋</i> Copy
-                        </button>
-                    </div>
-                </div>
-            </div>
+        <div class="input-group">
+            <label for="code">Enter your code to encrypt:</label>
+            <textarea id="code" placeholder="-- Your Lua code here&#10;print('Hello World!')"></textarea>
         </div>
 
-        <div class="footer">
-            <p>🔐 Multi-layer encryption • 5 layers • 16 passwords • Auto-generated hash</p>
+        <button id="encryptBtn">
+            <span class="button-content">
+                <span>🔐 Encrypt & Upload</span>
+            </span>
+        </button>
+
+        <div id="result" class="result">
+            <div class="result-header">
+                <span class="result-title">Encryption Result</span>
+                <button class="copy-btn" onclick="copyToClipboard()">Copy Link</button>
+            </div>
+            <div id="resultContent" class="result-content"></div>
         </div>
     </div>
 
     <script>
-        async function encryptCode() {
-            const textarea = document.getElementById('luaCode');
-            const button = document.getElementById('encryptBtn');
-            const statusDiv = document.getElementById('status');
-            const resultSection = document.getElementById('resultSection');
+        const encryptBtn = document.getElementById('encryptBtn');
+        const codeInput = document.getElementById('code');
+        const resultDiv = document.getElementById('result');
+        const resultContent = document.getElementById('resultContent');
+
+        async function encryptAndUpload() {
+            const code = codeInput.value.trim();
             
-            const luaCode = textarea.value.trim();
-            
-            if (!luaCode) {
-                showStatus('Please enter some Lua code', 'error');
+            if (!code) {
+                showResult('Please enter some code to encrypt', 'error');
                 return;
             }
-            
-            // Disable button while sending
-            button.disabled = true;
-            button.innerHTML = '<div class="loader"></div> Encrypting...';
-            
-            // Clear previous status and result
-            statusDiv.className = 'status';
-            resultSection.style.display = 'none';
-            
+
+            // Show loading state
+            const originalContent = encryptBtn.innerHTML;
+            encryptBtn.innerHTML = '<span class="button-content"><span class="loading"></span>Encrypting...</span>';
+            encryptBtn.disabled = true;
+
             try {
-                const response = await fetch('/api/start', {
+                const response = await fetch('https://luaguard-ochre.vercel.app/api/start', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ code: luaCode })
+                    body: JSON.stringify({ code: code })
                 });
-                
+
                 const data = await response.json();
-                
-                if (response.ok && data.success) {
-                    showStatus('✅ Code encrypted successfully!', 'success');
-                    
-                    // Display the result
-                    document.getElementById('resultHash').textContent = data.hash;
-                    document.getElementById('resultEncrypted').textContent = 
-                        `getgenv().code_hash = "${data.hash}"\n\n-- Encrypted code\n...`; // Show preview
-                    
-                    // Set download link
-                    const downloadLink = document.getElementById('downloadLink');
-                    downloadLink.href = data.downloadUrl || `/api/get-file?file=${data.filename}`;
-                    
-                    resultSection.style.display = 'block';
-                    
-                    // Store full result for copying
-                    window.lastResult = data;
-                } else {
-                    showStatus(`❌ Error: ${data.error || 'Unknown error'}`, 'error');
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Encryption failed');
                 }
+
+                showResult(data.pasteUrl || data.message || 'Upload successful!', 'success');
             } catch (error) {
-                showStatus(`❌ Network error: ${error.message}`, 'error');
-                console.error('Error:', error);
+                showResult('Error: ' + error.message, 'error');
             } finally {
-                // Re-enable button
-                button.disabled = false;
-                button.innerHTML = '<i>🔒</i> Encrypt & Save';
+                // Restore button state
+                encryptBtn.innerHTML = originalContent;
+                encryptBtn.disabled = false;
             }
         }
-        
-        function showStatus(message, type) {
-            const statusDiv = document.getElementById('status');
-            statusDiv.textContent = message;
-            statusDiv.className = `status ${type}`;
-        }
-        
-        function clearAll() {
-            document.getElementById('luaCode').value = '';
-            document.getElementById('status').className = 'status';
-            document.getElementById('resultSection').style.display = 'none';
-            window.lastResult = null;
-        }
-        
-        function loadExample() {
-            document.getElementById('luaCode').value = `-- Advanced Lua Example
-local function fibonacci(n)
-    if n <= 1 then
-        return n
-    end
-    return fibonacci(n-1) + fibonacci(n-2)
-end
 
-print("Fibonacci(10) =", fibonacci(10))
-
-local players = {"Alice", "Bob", "Charlie"}
-for i, player in ipairs(players) do
-    print("Player " .. i .. ": " .. player)
-end
-
--- Your secret logic here
-getgenv().secret_key = "my_secret_key"`;
+        function showResult(message, type) {
+            resultContent.textContent = message;
+            resultDiv.className = 'result show ' + type;
         }
-        
+
         function copyToClipboard() {
-            if (!window.lastResult) return;
-            
-            const text = `getgenv().code_hash = "${window.lastResult.hash}"\n\n-- File: ${window.lastResult.filename}\n-- Download: ${window.location.origin}${window.lastResult.downloadUrl}`;
-            
+            const text = resultContent.textContent;
             navigator.clipboard.writeText(text).then(() => {
-                showStatus('✅ Copied to clipboard!', 'success');
-                setTimeout(() => {
-                    document.getElementById('status').className = 'status';
-                }, 2000);
+                alert('Link copied to clipboard!');
+            }).catch(() => {
+                alert('Failed to copy link');
             });
         }
-        
-        // Add keyboard shortcut (Ctrl+Enter)
-        document.getElementById('luaCode').addEventListener('keydown', function(e) {
-            if (e.ctrlKey && e.key === 'Enter') {
+
+        encryptBtn.addEventListener('click', encryptAndUpload);
+
+        // Allow Enter key to submit (but with Shift+Enter for new line)
+        codeInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                encryptCode();
+                encryptAndUpload();
             }
-        });
-        
-        // Load example on page load
-        window.addEventListener('load', function() {
-            // Optional: Load example automatically
-            // loadExample();
         });
     </script>
 </body>
