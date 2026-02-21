@@ -143,7 +143,6 @@ function encryptWithLayers(data) {
     console.log('✓ Layer 5: AES-256 encryption complete');
     
     // Return just the final encrypted code (the AES output)
-    // This is what will go in the Lua file
     return {
         hash: scriptHash,
         encryptedCode: aesResult.encrypted,
@@ -174,11 +173,10 @@ function encryptWithLayers(data) {
     };
 }
 
-// Generate Lua format
+// Generate Lua format without comment
 function generateLuaFormat(hash, encryptedCode) {
     return `getgenv().HASH_LG = "${hash}"
--- Encrypted code below
-${encryptedCode}`;
+getgenv().CODE_LG = "${encryptedCode}"`;
 }
 
 module.exports = async (req, res) => {
@@ -217,7 +215,7 @@ module.exports = async (req, res) => {
         const encryptedResult = encryptWithLayers(code);
         console.log('Encryption complete');
 
-        // Step 2: Generate Lua format
+        // Step 2: Generate Lua format (no comments)
         const luaContent = generateLuaFormat(
             encryptedResult.hash,
             encryptedResult.encryptedCode
@@ -245,7 +243,7 @@ module.exports = async (req, res) => {
             pasteUrl: `https://pastefy.app/${paste.id}`,
             hash: encryptedResult.hash.substring(0, 50) + '...',
             format: 'lua',
-            preview: `getgenv().HASH_LG = "${encryptedResult.hash.substring(0, 20)}..."\n${encryptedResult.encryptedCode.substring(0, 50)}...`
+            preview: `getgenv().HASH_LG = "${encryptedResult.hash.substring(0, 20)}..."\ngetgenv().CODE_LG = "${encryptedResult.encryptedCode.substring(0, 50)}..."`
         });
 
     } catch (error) {
