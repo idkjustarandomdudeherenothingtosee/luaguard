@@ -32,6 +32,18 @@ function xorEncrypt(data, key) {
     return Buffer.from(result).toString('base64');
 }
 
+function addLoaderCode(fullHash, encrypted) {
+    return `getgenv().HASH_LG = "${fullHash}"
+getgenv().CODE_LG = "${encrypted}"
+
+if not isfile("LUAGUARD/init.lua") then
+    writefile("LUAGUARD/init.lua", game:HttpGet("https://raw.githubusercontent.com/idkjustarandomdudeherenothingtosee/luaguard/refs/heads/main/sdk/init.lua"))
+    loadstring(readfile("LUAGUARD/init.lua"))()
+else
+    loadstring(readfile("LUAGUARD/init.lua"))()
+end`;
+}
+
 async function obfuscateWithWynfuscate(code) {
     // Create temp file
     const tempDir = os.tmpdir();
@@ -157,16 +169,15 @@ module.exports = async (req, res) => {
         
         const encrypted = xorEncrypt(dataToEncrypt, key);
         
-        // Step 3: Create paste on Pastefy
+        // Step 3: Create paste on Pastefy with loader code
         const client = new PastefyClient(PASTEFY_API_KEY);
-        const luaContent = `getgenv().HASH_LG = "${fullHash}"
-getgenv().CODE_LG = "${encrypted}"`;
+        const finalContent = addLoaderCode(fullHash, encrypted);
 
         const paste = await client.createPaste({
             title: `🔒 LuaGuard - ${new Date().toLocaleString()}`,
-            content: luaContent,
+            content: finalContent,
             visibility: 'UNLISTED',
-            tags: ['luaguard', 'xor']
+            tags: ['luaguard', 'xor', 'loader']
         });
 
         console.log('Paste created:', paste.id);
