@@ -1,5 +1,8 @@
 // api/obfuscate.cjs
 const crypto = require('crypto');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { PastefyClient } = require('@interaapps/pastefy');
 const FormData = require('form-data');
 
@@ -29,67 +32,73 @@ function xorEncrypt(data, key) {
 }
 
 async function obfuscateWithWynfuscate(code) {
-    const form = new FormData();
+    // Create temp file
+    const tempDir = os.tmpdir();
+    const tempFilePath = path.join(tempDir, `script_${Date.now()}.lua`);
     
-    // Create a buffer from the code
-    const codeBuffer = Buffer.from(code, 'utf-8');
-    
-    // THIS IS THE CORRECT WAY - using buffer directly
-    form.append('file', codeBuffer, {
-        filename: 'script.lua',
-        contentType: 'text/plain',
-        knownLength: codeBuffer.length
-    });
-    
-    form.append('targetPlatform', 'ROBLOX_COMPAT');
-    form.append('enhancedCompression', 'true');
-
-    // Submit job
-    const submitResponse = await fetch(`${WYNFUSCATE_URL}/obfuscate`, {
-        method: 'POST',
-        headers: { 
-            'Authorization': `Bearer ${WYNFUSCATE_API_KEY}`,
-            ...form.getHeaders()
-        },
-        body: form,
-    });
-
-    if (!submitResponse.ok) {
-        const error = await submitResponse.text();
-        console.error('Wynfuscate error response:', error);
-        throw new Error(`Wynfuscate submission failed: ${error}`);
-    }
-
-    const job = await submitResponse.json();
-    console.log('Job submitted:', job.id);
-
-    // Poll for completion
-    let jobStatus;
-    for (let i = 0; i < 30; i++) {
-        await new Promise(r => setTimeout(r, 2000));
+    try {
+        // Write code to temp file
+        fs.writeFileSync(tempFilePath, code, 'utf-8');
         
-        const statusResponse = await fetch(`${WYNFUSCATE_URL}/jobs/${job.id}`, {
+        const form = new FormData();
+        form.append('file', fs.createReadStream(tempFilePath));
+        form.append('targetPlatform', 'ROBLOX_COMPAT');
+        form.append('enhancedCompression', 'true');
+
+        // Submit job
+        const submitResponse = await fetch(`${WYNFUSCATE_URL}/obfuscate`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${WYNFUSCATE_API_KEY}`,
+                ...form.getHeaders()
+            },
+            body: form,
+        });
+
+        if (!submitResponse.ok) {
+            const error = await submitResponse.text();
+            throw new Error(`Wynfuscate submission failed: ${error}`);
+        }
+
+        const job = await submitResponse.json();
+        console.log('Job submitted:', job.id);
+
+        // Poll for completion
+        let jobStatus;
+        for (let i = 0; i < 30; i++) {
+            await new Promise(r => setTimeout(r, 2000));
+            
+            const statusResponse = await fetch(`${WYNFUSCATE_URL}/jobs/${job.id}`, {
+                headers: { 'Authorization': `Bearer ${WYNFUSCATE_API_KEY}` }
+            });
+            
+            if (!statusResponse.ok) continue;
+            
+            jobStatus = await statusResponse.json();
+            
+            if (jobStatus.status === 'completed') break;
+            if (jobStatus.status === 'failed') throw new Error('Obfuscation failed');
+        }
+
+        // Download result
+        const downloadResponse = await fetch(`${WYNFUSCATE_URL}/jobs/${job.id}/download`, {
             headers: { 'Authorization': `Bearer ${WYNFUSCATE_API_KEY}` }
         });
         
-        if (!statusResponse.ok) continue;
+        if (!downloadResponse.ok) {
+            throw new Error('Failed to download result');
+        }
         
-        jobStatus = await statusResponse.json();
+        return await downloadResponse.text();
         
-        if (jobStatus.status === 'completed') break;
-        if (jobStatus.status === 'failed') throw new Error('Obfuscation failed');
+    } finally {
+        // Clean up temp file
+        try {
+            fs.unlinkSync(tempFilePath);
+        } catch (e) {
+            console.error('Failed to delete temp file:', e);
+        }
     }
-
-    // Download result
-    const downloadResponse = await fetch(`${WYNFUSCATE_URL}/jobs/${job.id}/download`, {
-        headers: { 'Authorization': `Bearer ${WYNFUSCATE_API_KEY}` }
-    });
-    
-    if (!downloadResponse.ok) {
-        throw new Error('Failed to download result');
-    }
-    
-    return await downloadResponse.text();
 }
 
 module.exports = async (req, res) => {
@@ -111,7 +120,7 @@ module.exports = async (req, res) => {
         const { code } = req.body;
         if (!code) return res.status(400).json({ error: 'Code is required' });
 
-        console.log('Starting Wynfuscate obfuscation...');
+        console.log('Starting Wynfuscate obfuscation with temp file...');
         
         // Step 1: Obfuscate with Wynfuscate
         const obfuscatedCode = await obfuscateWithWynfuscate(code);
