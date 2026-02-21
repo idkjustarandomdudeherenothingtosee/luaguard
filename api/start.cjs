@@ -15,7 +15,6 @@ function shamirSplit(secret) {
     const fragment = crypto.randomBytes(32).toString('hex');
     return {
         fragment: fragment,
-        // Create 5 shares (in real Shamir you'd need threshold)
         shares: [
             crypto.randomBytes(32).toString('hex'),
             crypto.randomBytes(32).toString('hex'),
@@ -27,12 +26,10 @@ function shamirSplit(secret) {
     };
 }
 
-// XChaCha20 simulation (using ChaCha20-poly1305)
+// XChaCha20 simulation
 function xChaCha20Encrypt(data, key) {
-    // XChaCha20 uses 24-byte nonce, but we'll use 12 for ChaCha20
     const iv = crypto.randomBytes(12);
     try {
-        // Try to use chacha20 if available
         const cipher = crypto.createCipheriv('chacha20-poly1305', key.slice(0, 32), iv);
         const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
         const authTag = cipher.getAuthTag();
@@ -42,7 +39,6 @@ function xChaCha20Encrypt(data, key) {
             authTag: authTag.toString('base64')
         };
     } catch (e) {
-        // Fallback to AES-256-GCM if chacha20 not available
         const cipher = crypto.createCipheriv('aes-256-gcm', key.slice(0, 32), iv);
         const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
         const authTag = cipher.getAuthTag();
@@ -57,7 +53,6 @@ function xChaCha20Encrypt(data, key) {
 
 // RSA encryption
 function rsaEncrypt(data) {
-    // Generate RSA key pair
     const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
         modulusLength: 2048,
         publicKeyEncoding: {
@@ -70,7 +65,6 @@ function rsaEncrypt(data) {
         }
     });
     
-    // Encrypt the data with the public key
     const encrypted = crypto.publicEncrypt(publicKey, Buffer.from(data));
     
     return {
@@ -80,10 +74,10 @@ function rsaEncrypt(data) {
     };
 }
 
-// Twofish simulation (using AES-256 as Twofish isn't in Node.js)
+// Twofish simulation
 function twofishEncrypt(data) {
-    const key = crypto.randomBytes(32); // 256-bit key
-    const iv = crypto.randomBytes(16);   // 128-bit IV
+    const key = crypto.randomBytes(32);
+    const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
     const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
     
@@ -96,8 +90,8 @@ function twofishEncrypt(data) {
 
 // AES-256 encryption
 function aes256Encrypt(data) {
-    const key = crypto.randomBytes(32); // 256-bit key
-    const iv = crypto.randomBytes(16);   // 128-bit IV
+    const key = crypto.randomBytes(32);
+    const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
     const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
     
@@ -108,15 +102,15 @@ function aes256Encrypt(data) {
     };
 }
 
-// Main encryption function (The Onion)
+// Main encryption function
 function encryptWithLayers(data) {
     console.log('Starting onion encryption process...');
     
-    // Layer 0: Generate 128-letter random hash for the script
+    // Layer 0: Generate 128-letter random hash
     const scriptHash = generateRandomHash(128);
     console.log('✓ Generated script hash');
     
-    // Layer 1: Shamir's Secret Sharing creates a Key Fragment
+    // Layer 1: Shamir's Secret Sharing
     const shamirResult = shamirSplit(data + scriptHash);
     console.log('✓ Layer 1: Shamir Secret Sharing complete');
     
@@ -129,7 +123,7 @@ function encryptWithLayers(data) {
     const rsaResult = rsaEncrypt(xchachaKey.toString('base64'));
     console.log('✓ Layer 3: RSA encryption complete');
     
-    // Combine data for next layers (the encrypted XChaCha20 key is now in RSA)
+    // Combine data for next layers
     const combinedData = JSON.stringify({
         version: '1.0',
         scriptHash: scriptHash,
@@ -137,7 +131,6 @@ function encryptWithLayers(data) {
         xchacha: xchachaResult,
         rsa: {
             encrypted: rsaResult.encrypted
-            // private key NOT included here - will be in metadata
         }
     });
     
@@ -149,17 +142,13 @@ function encryptWithLayers(data) {
     const aesResult = aes256Encrypt(JSON.stringify(twofishResult));
     console.log('✓ Layer 5: AES-256 encryption complete');
     
-    // Final encrypted package with all metadata needed for decryption
-    // (In production, the metadata would be split via Shamir)
-    const finalPackage = {
-        version: '1.0',
-        algorithm: 'onion-5layer',
-        timestamp: new Date().toISOString(),
-        scriptHash: scriptHash, // Added this at root level for easy access
-        data: aesResult.encrypted,
-        // Store metadata needed for decryption
-        // To truly follow the spec, these would be split via Shamir
-        decryptionMetadata: {
+    // Return just the final encrypted code (the AES output)
+    // This is what will go in the Lua file
+    return {
+        hash: scriptHash,
+        encryptedCode: aesResult.encrypted,
+        // Store metadata separately for decryption (not included in Lua output)
+        metadata: {
             aes: {
                 key: aesResult.key,
                 iv: aesResult.iv
@@ -169,10 +158,10 @@ function encryptWithLayers(data) {
                 iv: twofishResult.iv
             },
             rsa: {
-                privateKey: rsaResult.privateKey  // Required to decrypt XChaCha20 key
+                privateKey: rsaResult.privateKey
             },
             xchacha: {
-                key: xchachaKey.toString('base64'), // This is RSA encrypted in the package
+                key: xchachaKey.toString('base64'),
                 iv: xchachaResult.iv,
                 authTag: xchachaResult.authTag
             },
@@ -181,20 +170,15 @@ function encryptWithLayers(data) {
                 shares: shamirResult.shares
             },
             scriptHash: scriptHash
-        },
-        // Decryption instructions
-        decrypt: {
-            steps: [
-                "1. Use Shamir shares to get AES key",
-                "2. Decrypt AES → get Twofish",
-                "3. Decrypt Twofish → get RSA private key payload",
-                "4. Decrypt RSA → get XChaCha20 key",
-                "5. Decrypt XChaCha20 → get original data"
-            ]
         }
     };
-    
-    return finalPackage;
+}
+
+// Generate Lua format
+function generateLuaFormat(hash, encryptedCode) {
+    return `getgenv().HASH_LG = "${hash}"
+-- Encrypted code below
+${encryptedCode}`;
 }
 
 module.exports = async (req, res) => {
@@ -230,41 +214,43 @@ module.exports = async (req, res) => {
 
         // Step 1: Encrypt with all 5 layers
         console.log('Starting 5-layer encryption...');
-        const encryptedPackage = encryptWithLayers(code);
+        const encryptedResult = encryptWithLayers(code);
         console.log('Encryption complete');
 
-        // Step 2: Upload to Pastefy
+        // Step 2: Generate Lua format
+        const luaContent = generateLuaFormat(
+            encryptedResult.hash,
+            encryptedResult.encryptedCode
+        );
+
+        // Step 3: Upload to Pastefy
         console.log('Connecting to Pastefy...');
         const client = new PastefyClient(PASTEFY_API_KEY);
         
         console.log('Creating paste...');
         const paste = await client.createPaste({
-            title: `🔒 LuaGuard Encrypted Code - ${new Date().toLocaleString()}`,
-            content: JSON.stringify(encryptedPackage, null, 2),
+            title: `🔒 LuaGuard Encrypted - ${new Date().toLocaleString()}`,
+            content: luaContent,
             visibility: 'UNLISTED',
-            tags: ['luaguard', 'encrypted', '5-layer', 'onion-encryption']
+            tags: ['luaguard', 'encrypted', 'lua', '5-layer']
         });
 
         console.log('✓ Paste created successfully with ID:', paste.id);
 
-        // Return success response (matches what your HTML expects)
+        // Return success response
         return res.status(200).json({
             success: true,
-            message: 'Code encrypted with 5 layers and uploaded to Pastefy',
+            message: 'Code encrypted and uploaded as Lua format',
             pasteId: paste.id,
             pasteUrl: `https://pastefy.app/${paste.id}`,
-            hash: encryptedPackage.scriptHash.substring(0, 50) + '...', // Fixed: now scriptHash is at root
-            encryptionDetails: {
-                layers: ['Shamir', 'XChaCha20', 'RSA', 'Twofish', 'AES-256'],
-                timestamp: encryptedPackage.timestamp,
-                version: encryptedPackage.version
-            }
+            hash: encryptedResult.hash.substring(0, 50) + '...',
+            format: 'lua',
+            preview: `getgenv().HASH_LG = "${encryptedResult.hash.substring(0, 20)}..."\n${encryptedResult.encryptedCode.substring(0, 50)}...`
         });
 
     } catch (error) {
         console.error('Encryption/upload error:', error);
         
-        // Check if it's a Pastefy error
         if (error.message && error.message.includes('Pastefy')) {
             return res.status(502).json({
                 error: 'Pastefy service error',
