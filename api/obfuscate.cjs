@@ -2,8 +2,9 @@
 const crypto = require('crypto');
 const { PastefyClient } = require('@interaapps/pastefy');
 const FormData = require('form-data');
+const { Readable } = require('stream');
 
-const WYNFUSCATE_API_KEY = 'wynf_ew84z6L93odfnAc017sZaJdOVTwPBvH0'; // Set this in env variables
+const WYNFUSCATE_API_KEY = 'wynf_ew84z6L93odfnAc017sZaJdOVTwPBvH0';
 const WYNFUSCATE_URL = 'https://wynfuscate.com/api/v1';
 const PASTEFY_API_KEY = '2K0kaS4rVTo11xKKp6JnlFROwAqFuBo817OxI0TIBX2QjOxawim3mBiEuPuj';
 
@@ -31,28 +32,27 @@ function xorEncrypt(data, key) {
 async function obfuscateWithWynfuscate(code) {
     const form = new FormData();
     
-    // Create a buffer from the code
-    const codeBuffer = Buffer.from(code, 'utf-8');
+    // Create a stream from the code string
+    const stream = Readable.from([code]);
     
-    // Append as a file with proper filename
-    form.append('file', codeBuffer, {
+    // Append as file
+    form.append('file', stream, {
         filename: 'script.lua',
-        contentType: 'application/octet-stream',
-        knownLength: codeBuffer.length
+        contentType: 'text/plain',
     });
     
     form.append('targetPlatform', 'ROBLOX_COMPAT');
     form.append('enhancedCompression', 'true');
 
-    // Get form headers
-    const formHeaders = form.getHeaders();
+    // Get headers
+    const headers = form.getHeaders();
 
     // Submit job
     const submitResponse = await fetch(`${WYNFUSCATE_URL}/obfuscate`, {
         method: 'POST',
         headers: { 
             'Authorization': `Bearer ${WYNFUSCATE_API_KEY}`,
-            ...formHeaders
+            ...headers
         },
         body: form,
     });
@@ -69,33 +69,21 @@ async function obfuscateWithWynfuscate(code) {
     // Poll for completion
     let jobStatus;
     for (let i = 0; i < 30; i++) {
-        console.log(`Polling attempt ${i + 1}/30...`);
+        await new Promise(r => setTimeout(r, 2000));
         
         const statusResponse = await fetch(`${WYNFUSCATE_URL}/jobs/${job.id}`, {
             headers: { 'Authorization': `Bearer ${WYNFUSCATE_API_KEY}` }
         });
         
-        if (!statusResponse.ok) {
-            console.log('Status check failed:', await statusResponse.text());
-            continue;
-        }
+        if (!statusResponse.ok) continue;
         
         jobStatus = await statusResponse.json();
-        console.log('Job status:', jobStatus.status);
         
-        if (jobStatus.status === 'completed') {
-            console.log('Job completed!');
-            break;
-        }
-        if (jobStatus.status === 'failed') {
-            throw new Error('Obfuscation failed');
-        }
-        
-        await new Promise(r => setTimeout(r, 2000));
+        if (jobStatus.status === 'completed') break;
+        if (jobStatus.status === 'failed') throw new Error('Obfuscation failed');
     }
 
     // Download result
-    console.log('Downloading result...');
     const downloadResponse = await fetch(`${WYNFUSCATE_URL}/jobs/${job.id}/download`, {
         headers: { 'Authorization': `Bearer ${WYNFUSCATE_API_KEY}` }
     });
@@ -132,14 +120,9 @@ module.exports = async (req, res) => {
             return res.status(400).json({ error: 'Code is required' });
         }
 
-        if (typeof code !== 'string') {
-            return res.status(400).json({ error: 'Code must be a string' });
-        }
-
-        console.log('Received code to obfuscate, length:', code.length);
+        console.log('Obfuscating code...');
         
         // Step 1: Obfuscate with Wynfuscate
-        console.log('Sending to Wynfuscate...');
         const obfuscatedCode = await obfuscateWithWynfuscate(code);
         
         console.log('Obfuscation complete, encrypting...');
@@ -155,7 +138,6 @@ module.exports = async (req, res) => {
         const encrypted = xorEncrypt(dataToEncrypt, key);
         
         // Step 3: Create paste on Pastefy
-        console.log('Creating Pastefy paste...');
         const client = new PastefyClient(PASTEFY_API_KEY);
         const luaContent = `getgenv().HASH_LG = "${fullHash}"
 getgenv().CODE_LG = "${encrypted}"`;
@@ -169,7 +151,6 @@ getgenv().CODE_LG = "${encrypted}"`;
 
         console.log('Paste created:', paste.id);
 
-        // Return success
         res.status(200).json({
             success: true,
             pasteUrl: `https://pastefy.app/${paste.id}`,
