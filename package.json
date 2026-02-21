@@ -1,9 +1,10 @@
 {
-  "name": "lua-encryptor",
+  "name": "luaguard-api",
   "version": "1.0.0",
+  "description": "LuaGuard encryption API",
+  "main": "public/index.html",
+  "type": "module",
   "dependencies": {
-    "fs": "0.0.1-security",
-    "path": "^0.12.7",
-    "crypto": "^1.0.1"
+    "@interaapps/pastefy": "^1.0.0"
   }
 }
