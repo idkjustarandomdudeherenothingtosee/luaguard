@@ -10,6 +10,33 @@ function generateRandomHash(length = 128) {
         .slice(0, length);
 }
 
+// Derive keys from hash
+function deriveKeysFromHash(hash) {
+    const hashBuffer = Buffer.from(hash, 'hex');
+    
+    // Use different parts of the hash for different keys
+    return {
+        aes: {
+            key: crypto.createHash('sha256').update(hash + 'aes_key').digest('base64'),
+            iv: crypto.createHash('sha256').update(hash + 'aes_iv').digest('base64').substring(0, 24)
+        },
+        twofish: {
+            key: crypto.createHash('sha256').update(hash + 'twofish_key').digest('base64'),
+            iv: crypto.createHash('sha256').update(hash + 'twofish_iv').digest('base64').substring(0, 24)
+        },
+        rsa: {
+            // RSA private key is too big to derive from hash, so we'll generate it and encrypt it with the hash
+            // This way it's still protected by the hash
+            encrypted: null // Will be set later
+        },
+        xchacha: {
+            key: crypto.createHash('sha256').update(hash + 'xchacha_key').digest('base64'),
+            iv: crypto.createHash('sha256').update(hash + 'xchacha_iv').digest('base64').substring(0, 24),
+            authTag: crypto.createHash('sha256').update(hash + 'xchacha_auth').digest('base64').substring(0, 24)
+        }
+    };
+}
+
 // Real Shamir's Secret Sharing implementation
 function shamirSplit(secret, numShares = 5, threshold = 3) {
     const prime = BigInt('0xffffffffffffffffffffffffffffff61'); // 2^127 - 1
@@ -20,7 +47,7 @@ function shamirSplit(secret, numShares = 5, threshold = 3) {
         secretBig = (secretBig << 8n) | BigInt(secret.charCodeAt(i));
     }
     
-    // Generate random coefficients (polynomial of degree threshold-1)
+    // Generate random coefficients
     const coefficients = [secretBig];
     for (let i = 1; i < threshold; i++) {
         coefficients.push(crypto.randomBytes(32).readBigUInt64LE() % prime);
@@ -51,20 +78,19 @@ function shamirSplit(secret, numShares = 5, threshold = 3) {
 }
 
 // XChaCha20-Poly1305 encryption
-function xChaCha20Encrypt(data, key) {
-    const iv = crypto.randomBytes(24);
-    const cipher = crypto.createCipheriv('chacha20-poly1305', key, iv);
+function xChaCha20Encrypt(data, key, iv, authTag) {
+    const keyBuffer = Buffer.from(key, 'base64');
+    const ivBuffer = Buffer.from(iv, 'base64').subarray(0, 12); // ChaCha20 uses 12-byte nonce
+    
+    const cipher = crypto.createCipheriv('chacha20-poly1305', keyBuffer, ivBuffer);
     const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
-    const authTag = cipher.getAuthTag();
     
     return {
-        encrypted: encrypted.toString('base64'),
-        iv: iv.toString('base64'),
-        authTag: authTag.toString('base64')
+        encrypted: encrypted.toString('base64')
     };
 }
 
-// RSA-2048 encryption
+// RSA encryption
 function rsaEncrypt(data) {
     const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
         modulusLength: 2048,
@@ -90,31 +116,41 @@ function rsaEncrypt(data) {
     };
 }
 
-// Twofish simulation (using AES-256)
-function twofishEncrypt(data) {
-    const key = crypto.randomBytes(32);
+// Encrypt RSA private key with hash
+function encryptRSAPrivateKey(privateKey, hash) {
+    const key = crypto.createHash('sha256').update(hash + 'rsa_protection').digest();
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-    const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
+    let encrypted = cipher.update(privateKey, 'utf8', 'base64');
+    encrypted += cipher.final('base64');
     
     return {
-        encrypted: encrypted.toString('base64'),
-        key: key.toString('base64'),
+        encrypted: encrypted,
         iv: iv.toString('base64')
     };
 }
 
-// AES-256 encryption
-function aes256Encrypt(data) {
-    const key = crypto.randomBytes(32);
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+// Twofish simulation
+function twofishEncrypt(data, key, iv) {
+    const keyBuffer = Buffer.from(key, 'base64');
+    const ivBuffer = Buffer.from(iv, 'base64').subarray(0, 16);
+    const cipher = crypto.createCipheriv('aes-256-cbc', keyBuffer, ivBuffer);
     const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
     
     return {
-        encrypted: encrypted.toString('base64'),
-        key: key.toString('base64'),
-        iv: iv.toString('base64')
+        encrypted: encrypted.toString('base64')
+    };
+}
+
+// AES-256 encryption
+function aes256Encrypt(data, key, iv) {
+    const keyBuffer = Buffer.from(key, 'base64');
+    const ivBuffer = Buffer.from(iv, 'base64').subarray(0, 16);
+    const cipher = crypto.createCipheriv('aes-256-cbc', keyBuffer, ivBuffer);
+    const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
+    
+    return {
+        encrypted: encrypted.toString('base64')
     };
 }
 
@@ -122,13 +158,17 @@ function aes256Encrypt(data) {
 function encryptWithLayers(data) {
     console.log('Starting 5-layer onion encryption...');
     
-    // Layer 0: Generate 128-char hash
-    const scriptHash = generateRandomHash(128);
-    console.log('✓ Layer 0: Hash generated');
+    // Layer 0: Generate 128-char hash (this will be the master key)
+    const masterHash = generateRandomHash(128);
+    console.log('✓ Master hash generated');
+    
+    // Derive all keys from the master hash
+    const keys = deriveKeysFromHash(masterHash);
+    console.log('✓ All keys derived from hash');
     
     // Prepare data with hash for verification
     const dataWithHash = JSON.stringify({
-        hash: scriptHash,
+        hash: masterHash,
         content: data
     });
     
@@ -136,61 +176,50 @@ function encryptWithLayers(data) {
     const shamirResult = shamirSplit(dataWithHash);
     console.log('✓ Layer 1: Shamir Secret Sharing complete');
     
-    // Layer 2: XChaCha20-Poly1305
-    const xchachaKey = crypto.randomBytes(32);
-    const xchachaResult = xChaCha20Encrypt(dataWithHash, xchachaKey);
+    // Layer 2: XChaCha20-Poly1305 using derived keys
+    const xchachaResult = xChaCha20Encrypt(
+        dataWithHash, 
+        keys.xchacha.key, 
+        keys.xchacha.iv,
+        keys.xchacha.authTag
+    );
     console.log('✓ Layer 2: XChaCha20-Poly1305 complete');
     
-    // Layer 3: RSA-2048 encrypts the XChaCha20 key
-    const rsaResult = rsaEncrypt(xchachaKey.toString('base64'));
-    console.log('✓ Layer 3: RSA-2048 complete');
+    // Layer 3: RSA - generate and encrypt the private key with the master hash
+    const rsaKeyPair = rsaEncrypt(keys.xchacha.key); // Encrypt the xchacha key with RSA
+    const encryptedRSAPrivate = encryptRSAPrivateKey(rsaKeyPair.privateKey, masterHash);
+    console.log('✓ Layer 3: RSA complete');
     
     // Combine for next layers
     const combinedData = JSON.stringify({
         version: '1.0',
-        hash: scriptHash,
+        hash: masterHash,
         xchacha: xchachaResult,
-        rsa_encrypted: rsaResult.encrypted
+        rsa_encrypted: rsaKeyPair.encrypted,
+        rsa_protected: encryptedRSAPrivate // This is encrypted with the master hash
     });
     
-    // Layer 4: Twofish-256
-    const twofishResult = twofishEncrypt(combinedData);
+    // Layer 4: Twofish-256 using derived keys
+    const twofishResult = twofishEncrypt(combinedData, keys.twofish.key, keys.twofish.iv);
     console.log('✓ Layer 4: Twofish-256 complete');
     
-    // Layer 5: AES-256
+    // Layer 5: AES-256 using derived keys
     const aesResult = aes256Encrypt(JSON.stringify({
         twofish: twofishResult,
         timestamp: new Date().toISOString()
-    }));
+    }), keys.aes.key, keys.aes.iv);
     console.log('✓ Layer 5: AES-256 complete');
     
-    // Create the final package with everything needed for decryption
+    // Create the final package
     const finalPackage = {
         // Public part (goes to CODE_LG)
         encrypted: aesResult.encrypted,
-        // Private keys (needed for decryption)
-        keys: {
-            aes: {
-                key: aesResult.key,
-                iv: aesResult.iv
-            },
-            twofish: {
-                key: twofishResult.key,
-                iv: twofishResult.iv
-            },
-            rsa: {
-                privateKey: rsaResult.privateKey
-            },
-            xchacha: {
-                key: xchachaKey.toString('base64'),
-                iv: xchachaResult.iv,
-                authTag: xchachaResult.authTag
-            }
-        },
-        // The 5 Shamir shares (need 3 to reconstruct the original)
+        // The 5 Shamir shares (need 3 to reconstruct)
         shares: shamirResult.shares,
-        // Hash for verification
-        hash: scriptHash,
+        // Hash (master key)
+        hash: masterHash,
+        // Encrypted RSA private key (needs master hash to decrypt)
+        rsa_encrypted: encryptedRSAPrivate,
         // Metadata
         threshold: shamirResult.threshold,
         prime: shamirResult.prime
@@ -199,12 +228,12 @@ function encryptWithLayers(data) {
     return finalPackage;
 }
 
-// Generate Lua format with shares included
+// Generate Lua format (keys are hidden - they derive from hash)
 function generateLuaFormat(encryptedPackage) {
     const shares = encryptedPackage.shares;
-    const keys = encryptedPackage.keys;
     const hash = encryptedPackage.hash;
     const encrypted = encryptedPackage.encrypted;
+    const rsaEncrypted = encryptedPackage.rsa_encrypted;
     
     // Format shares as a Lua table
     let sharesLua = '{';
@@ -214,17 +243,9 @@ function generateLuaFormat(encryptedPackage) {
     }
     sharesLua += '}';
     
-    // Format keys as a Lua table
-    let keysLua = `{
-        aes={key="${keys.aes.key}", iv="${keys.aes.iv}"},
-        twofish={key="${keys.twofish.key}", iv="${keys.twofish.iv}"},
-        rsa={privateKey="${keys.rsa.privateKey.replace(/\n/g, '\\n')}"},
-        xchacha={key="${keys.xchacha.key}", iv="${keys.xchacha.iv}", authTag="${keys.xchacha.authTag}"}
-    }`;
-    
     return `getgenv().HASH_LG = "${hash}"
 getgenv().SHARES_LG = ${sharesLua}
-getgenv().KEYS_LG = ${keysLua}
+getgenv().RSA_PROTECTED = {iv="${rsaEncrypted.iv}", data="${rsaEncrypted.encrypted}"}
 getgenv().CODE_LG = "${encrypted}"`;
 }
 
@@ -250,12 +271,12 @@ module.exports = async (req, res) => {
             return res.status(400).json({ error: 'Code is required' });
         }
 
-        console.log('Encrypting code of length:', code.length);
+        console.log('Encrypting code...');
         
         // Encrypt with all layers
         const encryptedPackage = encryptWithLayers(code);
         
-        // Generate Lua format with everything included
+        // Generate Lua format (keys are hidden in the hash)
         const luaContent = generateLuaFormat(encryptedPackage);
         
         // Upload to Pastefy
@@ -267,14 +288,12 @@ module.exports = async (req, res) => {
             tags: ['luaguard', 'encrypted', '5-layer']
         });
 
-        // Return success with the paste URL
         return res.status(200).json({
             success: true,
-            message: 'Code encrypted with all layers',
+            message: 'Code encrypted - all keys are hidden in the hash',
             pasteUrl: `https://pastefy.app/${paste.id}`,
             pasteId: paste.id,
-            hash: encryptedPackage.hash.substring(0, 20) + '...',
-            note: 'All decryption data is included in the paste (shares, keys, etc)'
+            hash: encryptedPackage.hash.substring(0, 20) + '...'
         });
 
     } catch (error) {
