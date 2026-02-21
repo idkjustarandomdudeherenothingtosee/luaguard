@@ -2,7 +2,6 @@
 const crypto = require('crypto');
 const { PastefyClient } = require('@interaapps/pastefy');
 const FormData = require('form-data');
-const { Readable } = require('stream');
 
 const WYNFUSCATE_API_KEY = 'wynf_ew84z6L93odfnAc017sZaJdOVTwPBvH0';
 const WYNFUSCATE_URL = 'https://wynfuscate.com/api/v1';
@@ -32,34 +31,32 @@ function xorEncrypt(data, key) {
 async function obfuscateWithWynfuscate(code) {
     const form = new FormData();
     
-    // Create a stream from the code string
-    const stream = Readable.from([code]);
+    // Create a buffer from the code
+    const codeBuffer = Buffer.from(code, 'utf-8');
     
-    // Append as file
-    form.append('file', stream, {
+    // THIS IS THE CORRECT WAY - using buffer directly
+    form.append('file', codeBuffer, {
         filename: 'script.lua',
         contentType: 'text/plain',
+        knownLength: codeBuffer.length
     });
     
     form.append('targetPlatform', 'ROBLOX_COMPAT');
     form.append('enhancedCompression', 'true');
-
-    // Get headers
-    const headers = form.getHeaders();
 
     // Submit job
     const submitResponse = await fetch(`${WYNFUSCATE_URL}/obfuscate`, {
         method: 'POST',
         headers: { 
             'Authorization': `Bearer ${WYNFUSCATE_API_KEY}`,
-            ...headers
+            ...form.getHeaders()
         },
         body: form,
     });
 
     if (!submitResponse.ok) {
         const error = await submitResponse.text();
-        console.error('Wynfuscate error:', error);
+        console.error('Wynfuscate error response:', error);
         throw new Error(`Wynfuscate submission failed: ${error}`);
     }
 
@@ -96,36 +93,30 @@ async function obfuscateWithWynfuscate(code) {
 }
 
 module.exports = async (req, res) => {
-    // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Content-Type', 'application/json');
 
-    // Handle preflight
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
     }
 
-    // Only allow POST
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
     try {
         const { code } = req.body;
-        
-        if (!code) {
-            return res.status(400).json({ error: 'Code is required' });
-        }
+        if (!code) return res.status(400).json({ error: 'Code is required' });
 
-        console.log('Obfuscating code...');
+        console.log('Starting Wynfuscate obfuscation...');
         
         // Step 1: Obfuscate with Wynfuscate
         const obfuscatedCode = await obfuscateWithWynfuscate(code);
         
-        console.log('Obfuscation complete, encrypting...');
+        console.log('Wynfuscate success, creating paste...');
 
         // Step 2: Generate hash and encrypt
         const { fullHash, key, hashWithoutKey } = generateHashWithKey();
@@ -153,15 +144,11 @@ getgenv().CODE_LG = "${encrypted}"`;
 
         res.status(200).json({
             success: true,
-            pasteUrl: `https://pastefy.app/${paste.id}`,
-            pasteId: paste.id
+            pasteUrl: `https://pastefy.app/${paste.id}`
         });
 
     } catch (error) {
-        console.error('Obfuscation error:', error);
-        res.status(500).json({ 
-            success: false,
-            error: error.message || 'Internal server error' 
-        });
+        console.error('Error:', error);
+        res.status(500).json({ error: error.message });
     }
 };
