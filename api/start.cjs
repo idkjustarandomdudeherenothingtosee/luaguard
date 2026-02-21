@@ -155,7 +155,8 @@ function encryptWithLayers(data) {
         version: '1.0',
         algorithm: 'onion-5layer',
         timestamp: new Date().toISOString(),
-        encrypted: aesResult.encrypted,
+        scriptHash: scriptHash, // Added this at root level for easy access
+        data: aesResult.encrypted,
         // Store metadata needed for decryption
         // To truly follow the spec, these would be split via Shamir
         decryptionMetadata: {
@@ -252,7 +253,7 @@ module.exports = async (req, res) => {
             message: 'Code encrypted with 5 layers and uploaded to Pastefy',
             pasteId: paste.id,
             pasteUrl: `https://pastefy.app/${paste.id}`,
-            hash: encryptedPackage.scriptHash.substring(0, 50) + '...',
+            hash: encryptedPackage.scriptHash.substring(0, 50) + '...', // Fixed: now scriptHash is at root
             encryptionDetails: {
                 layers: ['Shamir', 'XChaCha20', 'RSA', 'Twofish', 'AES-256'],
                 timestamp: encryptedPackage.timestamp,
