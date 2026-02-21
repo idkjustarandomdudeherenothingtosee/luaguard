@@ -5,6 +5,7 @@
   "main": "public/index.html",
   "type": "module",
   "dependencies": {
-    "@interaapps/pastefy": "^1.0.0"
+    "@interaapps/pastefy": "^1.0.0",
+    "form-data": "^4.0.0"
   }
 }
