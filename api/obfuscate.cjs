@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const { PastefyClient } = require('@interaapps/pastefy');
 const FormData = require('form-data');
 
-const WYNFUSCATE_API_KEY = 'wynf_your_api_key'; // Set this in env variables
+const WYNFUSCATE_API_KEY = 'wynf_ew84z6L93odfnAc017sZaJdOVTwPBvH0'; // Set this in env variables
 const WYNFUSCATE_URL = 'https://wynfuscate.com/api/v1';
 const PASTEFY_API_KEY = '2K0kaS4rVTo11xKKp6JnlFROwAqFuBo817OxI0TIBX2QjOxawim3mBiEuPuj';
 
